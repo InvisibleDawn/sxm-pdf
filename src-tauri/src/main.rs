@@ -1,0 +1,1148 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use tauri::{Emitter, Manager};
+
+/// Fichier passé en argument au lancement (ouvrir avec…) ou drapeau --capture.
+#[tauri::command]
+fn startup_args() -> Vec<String> {
+    std::env::args().skip(1).collect()
+}
+
+/// Lit un fichier et le renvoie en binaire brut (rapide pour les gros PDF).
+#[tauri::command]
+fn read_bytes(path: String) -> Result<tauri::ipc::Response, String> {
+    std::fs::read(&path)
+        .map(tauri::ipc::Response::new)
+        .map_err(|e| format!("Lecture impossible de {path} : {e}"))
+}
+
+/// Écrit un fichier ; le corps de la requête est le contenu binaire.
+#[tauri::command]
+fn write_bytes(request: tauri::ipc::Request) -> Result<(), String> {
+    let path = request
+        .headers()
+        .get("x-path")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| urlencode_decode(s))
+        .ok_or("Chemin manquant")?;
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else {
+        return Err("Contenu invalide".into());
+    };
+    std::fs::write(&path, data).map_err(|e| format!("Écriture impossible de {path} : {e}"))
+}
+
+fn urlencode_decode(s: &str) -> String {
+    #[cfg(target_os = "linux")]
+    {
+        urlencoding::decode(s).map(|c| c.into_owned()).unwrap_or_else(|_| s.to_string())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Décodage %XX minimal pour Windows/macOS
+        let bytes = s.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                if let Ok(b) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                    out.push(b);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+}
+
+/// Cherche LibreOffice : d'abord la copie embarquée, puis le système.
+fn find_soffice(app: &tauri::AppHandle) -> Option<PathBuf> {
+    if let Ok(res) = app.path().resource_dir() {
+        for rel in [
+            "libreoffice/program/soffice.exe",
+            "libreoffice/program/soffice",
+            "LibreOffice.app/Contents/MacOS/soffice",
+        ] {
+            let p = res.join(rel);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    let candidates: &[&str] = if cfg!(windows) {
+        &[
+            r"C:\Program Files\LibreOffice\program\soffice.exe",
+            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        ]
+    } else if cfg!(target_os = "macos") {
+        &["/Applications/LibreOffice.app/Contents/MacOS/soffice"]
+    } else {
+        &["/usr/bin/soffice", "/usr/bin/libreoffice", "/usr/lib64/libreoffice/program/soffice"]
+    };
+    candidates.iter().map(PathBuf::from).find(|p| p.exists())
+}
+
+/// Conversion hors ligne via LibreOffice (Office → PDF, ou PDF → Word avec infilter).
+#[tauri::command]
+async fn office_convert(
+    app: tauri::AppHandle,
+    path: String,
+    to: String,
+    infilter: Option<String>,
+) -> Result<String, String> {
+    let soffice = find_soffice(&app).ok_or(
+        "LibreOffice est introuvable. Sous Fedora : sudo dnf install libreoffice-writer libreoffice-calc libreoffice-impress",
+    )?;
+    let out_dir = std::env::temp_dir().join("sxm-pdf-conversions");
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    // Profil LibreOffice séparé : ne touche jamais au profil ni aux réglages de l'utilisateur.
+    let profile = std::env::temp_dir().join("sxm-pdf-lo-profile");
+    let profile_url = format!("file:///{}", profile.to_string_lossy().replace('\\', "/").trim_start_matches('/'));
+
+    let out_ext = to.split(':').next().unwrap_or("pdf").to_string();
+    let output = tauri::async_runtime::spawn_blocking(move || {
+        let mut cmd = Command::new(soffice);
+        cmd.arg(format!("-env:UserInstallation={profile_url}"))
+            .args(["--headless", "--norestore"]);
+        if let Some(f) = infilter {
+            cmd.arg(format!("--infilter={f}"));
+        }
+        cmd.args(["--convert-to", &to, "--outdir"])
+            .arg(&out_dir)
+            .arg(&path)
+            .output()
+            .map(|o| (o, out_dir, path))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("Échec du lancement de LibreOffice : {e}"))?;
+
+    let (out, out_dir, path) = output;
+    let stem = Path::new(&path).file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let pdf = out_dir.join(format!("{stem}.{out_ext}"));
+    if pdf.exists() {
+        Ok(pdf.to_string_lossy().to_string())
+    } else {
+        Err(format!(
+            "La conversion a échoué.\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        ))
+    }
+}
+
+/// Capture d'écran. Sous Linux (Wayland/GNOME) : passe par le portail système,
+/// qui affiche son propre sélecteur de zone. Ailleurs : capture de l'écran principal,
+/// le recadrage se fait ensuite dans l'éditeur de SXM PDF.
+#[tauri::command]
+async fn capture_screen() -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        use ashpd::desktop::screenshot::Screenshot;
+        let resp = Screenshot::request()
+            .interactive(true)
+            .modal(true)
+            .send()
+            .await
+            .map_err(|e| format!("Portail de capture indisponible : {e}"))?
+            .response()
+            .map_err(|_| "Capture annulée".to_string())?;
+        let uri = resp.uri().to_string();
+        let path = uri.strip_prefix("file://").unwrap_or(&uri);
+        return Ok(urlencoding::decode(path).map(|c| c.into_owned()).unwrap_or(path.to_string()));
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
+        let mon = monitors
+            .into_iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .ok_or("Aucun écran trouvé")?;
+        let img = mon.capture_image().map_err(|e| e.to_string())?;
+        let path = std::env::temp_dir().join(format!(
+            "sxm-capture-{}.png",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis())
+                .unwrap_or(0)
+        ));
+        img.save(&path).map_err(|e| e.to_string())?;
+        Ok(path.to_string_lossy().to_string())
+    }
+}
+
+/// Cherche qpdf : copie embarquée puis système.
+fn find_qpdf(app: &tauri::AppHandle) -> Option<PathBuf> {
+    if let Ok(res) = app.path().resource_dir() {
+        for rel in ["qpdf/bin/qpdf.exe", "qpdf/bin/qpdf", "qpdf/qpdf"] {
+            let p = res.join(rel);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    let candidates: &[&str] = if cfg!(windows) {
+        &[r"C:\Program Files\qpdf\bin\qpdf.exe"]
+    } else {
+        &["/usr/bin/qpdf", "/usr/local/bin/qpdf", "/opt/homebrew/bin/qpdf"]
+    };
+    candidates.iter().map(PathBuf::from).find(|p| p.exists())
+}
+
+fn run_qpdf(app: &tauri::AppHandle, args: Vec<String>) -> Result<(), String> {
+    let qpdf = find_qpdf(app).ok_or("qpdf est introuvable. Sous Fedora : sudo dnf install qpdf")?;
+    let mut cmd = Command::new(qpdf);
+    cmd.args(&args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // pas de fenêtre console
+    }
+    let out = cmd.output().map_err(|e| format!("Échec du lancement de qpdf : {e}"))?;
+    // Code 3 = succès avec avertissements
+    match out.status.code() {
+        Some(0) | Some(3) => Ok(()),
+        _ => {
+            let err = String::from_utf8_lossy(&out.stderr).to_string();
+            if err.contains("invalid password") {
+                Err("MOT_DE_PASSE_INVALIDE".into())
+            } else {
+                Err(format!("qpdf : {err}"))
+            }
+        }
+    }
+}
+
+/// Protège un PDF par mot de passe (AES-256). input peut être égal à output.
+#[tauri::command]
+async fn pdf_encrypt(
+    app: tauri::AppHandle,
+    input: String,
+    output: String,
+    user_pw: String,
+    owner_pw: String,
+    allow_print: bool,
+    allow_copy: bool,
+    allow_modify: bool,
+) -> Result<(), String> {
+    let mut args = vec![
+        "--encrypt".to_string(),
+        user_pw,
+        owner_pw,
+        "256".into(),
+        format!("--print={}", if allow_print { "full" } else { "none" }),
+        format!("--extract={}", if allow_copy { "y" } else { "n" }),
+        format!("--modify={}", if allow_modify { "all" } else { "none" }),
+        "--".into(),
+        input.clone(),
+    ];
+    if input == output {
+        args.push("--replace-input".into());
+    } else {
+        args.push(output);
+    }
+    tauri::async_runtime::spawn_blocking(move || run_qpdf(&app, args))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Retire la protection d'un PDF (mot de passe requis). Renvoie le chemin du PDF déchiffré.
+#[tauri::command]
+async fn pdf_decrypt(app: tauri::AppHandle, input: String, password: String) -> Result<String, String> {
+    let dir = std::env::temp_dir().join("sxm-pdf-decrypted");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(format!(
+        "{}.pdf",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    let out_s = out.to_string_lossy().to_string();
+    let args = vec![format!("--password={password}"), "--decrypt".into(), input, out_s.clone()];
+    tauri::async_runtime::spawn_blocking(move || run_qpdf(&app, args))
+        .await
+        .map_err(|e| e.to_string())??;
+    Ok(out_s)
+}
+
+/// Supprime un fichier temporaire créé par SXM PDF.
+#[tauri::command]
+fn remove_temp(path: String) {
+    let tmp = std::env::temp_dir();
+    if Path::new(&path).starts_with(&tmp) {
+        let _ = std::fs::remove_file(path);
+    }
+}
+
+/// Ouvre un nouveau message dans la messagerie par défaut avec le PDF en pièce jointe.
+#[tauri::command]
+async fn send_mail(path: String, subject: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || send_mail_impl(&path, &subject))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[cfg(target_os = "linux")]
+fn send_mail_impl(path: &str, subject: &str) -> Result<String, String> {
+    // xdg-email gère Thunderbird, Evolution, Geary… avec pièce jointe
+    let st = Command::new("xdg-email")
+        .args(["--subject", subject, "--attach", path])
+        .status()
+        .map_err(|e| format!("xdg-email introuvable : {e}"))?;
+    if st.success() {
+        Ok("ok".into())
+    } else {
+        reveal(path);
+        Err("Aucune messagerie compatible trouvée. Le fichier est affiché dans son dossier : glissez-le dans votre mail.".into())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn send_mail_impl(path: &str, _subject: &str) -> Result<String, String> {
+    // Ouvrir un fichier avec Mail crée un nouveau message avec la pièce jointe
+    let st = Command::new("open").args(["-a", "Mail", path]).status().map_err(|e| e.to_string())?;
+    if st.success() {
+        Ok("ok".into())
+    } else {
+        reveal(path);
+        Err("Impossible d'ouvrir Mail. Le fichier est affiché dans le Finder.".into())
+    }
+}
+
+#[cfg(windows)]
+fn send_mail_impl(path: &str, subject: &str) -> Result<String, String> {
+    use std::ffi::c_void;
+    #[repr(C)]
+    struct MapiFileDescW {
+        ul_reserved: u32,
+        fl_flags: u32,
+        n_position: u32,
+        lpsz_path_name: *const u16,
+        lpsz_file_name: *const u16,
+        lp_file_type: *mut c_void,
+    }
+    #[repr(C)]
+    struct MapiMessageW {
+        ul_reserved: u32,
+        lpsz_subject: *const u16,
+        lpsz_note_text: *const u16,
+        lpsz_message_type: *const u16,
+        lpsz_date_received: *const u16,
+        lpsz_conversation_id: *const u16,
+        fl_flags: u32,
+        lp_originator: *mut c_void,
+        n_recip_count: u32,
+        lp_recips: *mut c_void,
+        n_file_count: u32,
+        lp_files: *mut MapiFileDescW,
+    }
+    type SendMailW = unsafe extern "system" fn(usize, usize, *mut MapiMessageW, u32, u32) -> u32;
+    let wide = |s: &str| s.encode_utf16().chain(std::iter::once(0)).collect::<Vec<u16>>();
+    let w_path = wide(path);
+    let w_name = wide(Path::new(path).file_name().unwrap_or_default().to_string_lossy().as_ref());
+    let w_subject = wide(subject);
+
+    let result = unsafe {
+        let lib = libloading::Library::new("MAPI32.dll").map_err(|e| e.to_string());
+        match lib {
+            Ok(lib) => match lib.get::<SendMailW>(b"MAPISendMailW\0") {
+                Ok(f) => {
+                    let mut file = MapiFileDescW {
+                        ul_reserved: 0,
+                        fl_flags: 0,
+                        n_position: u32::MAX,
+                        lpsz_path_name: w_path.as_ptr(),
+                        lpsz_file_name: w_name.as_ptr(),
+                        lp_file_type: std::ptr::null_mut(),
+                    };
+                    let mut msg = MapiMessageW {
+                        ul_reserved: 0,
+                        lpsz_subject: w_subject.as_ptr(),
+                        lpsz_note_text: std::ptr::null(),
+                        lpsz_message_type: std::ptr::null(),
+                        lpsz_date_received: std::ptr::null(),
+                        lpsz_conversation_id: std::ptr::null(),
+                        fl_flags: 0,
+                        lp_originator: std::ptr::null_mut(),
+                        n_recip_count: 0,
+                        lp_recips: std::ptr::null_mut(),
+                        n_file_count: 1,
+                        lp_files: &mut file,
+                    };
+                    // MAPI_LOGON_UI (0x1) | MAPI_DIALOG (0x8)
+                    let rc = f(0, 0, &mut msg, 0x1 | 0x8, 0);
+                    if rc == 0 || rc == 1 { Ok(()) } else { Err(format!("MAPI {rc}")) } // 1 = annulé par l'utilisateur
+                }
+                Err(e) => Err(e.to_string()),
+            },
+            Err(e) => Err(e),
+        }
+    };
+    match result {
+        Ok(()) => Ok("ok".into()),
+        Err(_) => {
+            // Messagerie sans MAPI (nouvel Outlook, Mail de Windows, webmail) : on montre le fichier
+            reveal(path);
+            Err("Votre messagerie ne permet pas l'ajout automatique de pièce jointe. Le fichier est sélectionné dans l'Explorateur : glissez-le dans votre mail.".into())
+        }
+    }
+}
+
+/// Affiche le fichier dans le gestionnaire de fichiers.
+fn reveal(path: &str) {
+    #[cfg(windows)]
+    let _ = Command::new("explorer").arg(format!("/select,{path}")).spawn();
+    #[cfg(target_os = "macos")]
+    let _ = Command::new("open").args(["-R", path]).spawn();
+    #[cfg(target_os = "linux")]
+    let _ = Command::new("xdg-open")
+        .arg(Path::new(path).parent().unwrap_or(Path::new("/")))
+        .spawn();
+}
+
+/// Fichier de données de l'utilisateur (signatures, tampons, profils, modèles).
+/// Linux : ~/.config/com.sxm.pdf/ · Windows : %APPDATA%\\com.sxm.pdf\\ · macOS : ~/Library/Application Support/com.sxm.pdf/
+fn data_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Dossier de configuration inaccessible : {e}"))?;
+    Ok(dir.join("sxm-pdf-donnees.json"))
+}
+
+// ======================================================================= Données utilisateur (fichier JSON)
+//
+// Règles :
+//  - un seul verrou (DATA_LOCK) protège toutes les opérations sur le fichier de données
+//    (lecture, écriture, restauration, mise de côté) : jamais deux opérations simultanées côté Rust ;
+//    les fonctions internes ne reprennent jamais le verrou → pas d'interblocage ;
+//  - écriture dans un fichier temporaire forcé sur le disque, puis remplacement atomique (replace_file) ;
+//  - le .bak est lui aussi écrit de façon atomique, et uniquement à partir d'une version valide ;
+//  - le contenu est validé (structure, version du format) avant toute écriture ou restauration.
+
+static DATA_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Exécute f en tenant le verrou des données (un verrou empoisonné par un panic est récupéré).
+fn with_data_lock<T>(f: impl FnOnce() -> T) -> T {
+    let _g = DATA_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    f()
+}
+
+/// Version du format du fichier de données. Un fichier d'une version plus récente est refusé.
+const DATA_FORMAT: u64 = 1;
+
+#[tauri::command]
+async fn data_load(app: tauri::AppHandle) -> Result<String, String> {
+    let f = data_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || with_data_lock(|| load_json_file(&f))).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn data_save(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let f = data_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || with_data_lock(|| save_json_file(&f, &content))).await.map_err(|e| e.to_string())?
+}
+
+/// Contrôle de structure du fichier de données (types de chaque rubrique, version du format).
+/// Les contrôles détaillés champ par champ sont faits en plus côté interface avant un import
+/// ou une restauration ; ici on garantit qu'aucun fichier de forme incorrecte n'est écrit ni restauré.
+fn validate_data(v: &serde_json::Value) -> Result<(), String> {
+    use serde_json::Value;
+    let obj = v.as_object().ok_or("objet JSON attendu")?;
+    if let Some(fmt) = obj.get("_format") {
+        let n = fmt.as_u64().ok_or("numéro de format invalide")?;
+        if n == 0 || n > DATA_FORMAT {
+            return Err(format!("format {n} non pris en charge par cette version de SXM PDF"));
+        }
+    }
+    let is_str = |o: &serde_json::Map<String, Value>, k: &str| o.get(k).map(|x| x.is_string()).unwrap_or(false);
+    let is_obj = |o: &serde_json::Map<String, Value>, k: &str| o.get(k).map(|x| x.is_object()).unwrap_or(false);
+    for key in ["sxm.initials", "sxm.theme", "sxm.welcomed"] {
+        if let Some(x) = obj.get(key) {
+            if !x.is_string() {
+                return Err(format!("« {key} » doit être un texte"));
+            }
+        }
+    }
+    let lists: [(&str, fn(&serde_json::Map<String, Value>) -> bool); 4] = [
+        ("sxm.signatures", |o| {
+            o.get("src").and_then(|x| x.as_str()).map(|s| s.starts_with("data:image/")).unwrap_or(false)
+                && o.get("ratio").and_then(|x| x.as_f64()).map(|r| r > 0.0).unwrap_or(false)
+        }),
+        ("sxm.stamps", |o| o.get("label").map(|x| x.is_string()).unwrap_or(false) && o.get("color").map(|x| x.is_string()).unwrap_or(false)),
+        ("sxm.watermarkTemplates", |o| {
+            o.get("name").map(|x| x.is_string()).unwrap_or(false)
+                && o.get("opt").and_then(|x| x.as_object()).map(|p| p.get("text").map(|t| t.is_string()).unwrap_or(false)).unwrap_or(false)
+        }),
+        ("sxm.batchProfiles", |_| true), // contrôlé juste après (besoin des fermetures)
+    ];
+    for (key, check) in lists {
+        let Some(x) = obj.get(key) else { continue };
+        let arr = x.as_array().ok_or(format!("« {key} » doit être une liste"))?;
+        for (i, item) in arr.iter().enumerate() {
+            let o = item.as_object().ok_or(format!("« {key} » n° {} : objet attendu", i + 1))?;
+            let ok = if key == "sxm.batchProfiles" {
+                is_str(o, "name") && is_obj(o, "par") && is_obj(o, "sig") && is_obj(o, "stamp") && is_obj(o, "out")
+                    && o.get("pw").map(|p| p.is_boolean()).unwrap_or(false)
+            } else {
+                check(o)
+            };
+            if !ok {
+                return Err(format!("« {key} » n° {} invalide", i + 1));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_valid(s: &str) -> Result<serde_json::Value, String> {
+    let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("JSON invalide : {e}"))?;
+    validate_data(&v)?;
+    Ok(v)
+}
+
+/// Lit le fichier de données. S'il est absent : « {} ». S'il est illisible, corrompu ou de structure
+/// incorrecte, on se rabat sur la copie de secours .bak si elle est valide.
+fn load_json_file(f: &Path) -> Result<String, String> {
+    let valid = |s: &str| parse_valid(s).is_ok();
+    match std::fs::read_to_string(f) {
+        Ok(s) if valid(&s) => return Ok(s),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && !f.with_extension("json.bak").exists() => {
+            return Ok("{}".into())
+        }
+        _ => {}
+    }
+    match std::fs::read_to_string(f.with_extension("json.bak")) {
+        Ok(s) if valid(&s) => Ok(s),
+        _ if !f.exists() => Ok("{}".into()),
+        _ => Err("Le fichier de données est endommagé et aucune copie de secours valide n'a été trouvée.".into()),
+    }
+}
+
+/// Remplacement atomique de `dst` par `src`, y compris lorsque `dst` existe déjà.
+/// - Windows : MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) — appel explicite
+///   (std::fs::rename fait déjà MOVEFILE_REPLACE_EXISTING ; WRITE_THROUGH garantit en plus que le
+///   renommage est écrit sur le disque avant le retour). Si la destination est ouverte par un autre
+///   programme, repli sur std::fs::rename (sémantique POSIX de Windows 10+). Aucune dépendance ajoutée.
+/// - Linux / macOS : rename(2), atomique, puis synchronisation du dossier pour rendre le renommage durable.
+fn replace_file(src: &Path, dst: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
+        }
+        const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+        const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+        let w = |p: &Path| p.as_os_str().encode_wide().chain(std::iter::once(0)).collect::<Vec<u16>>();
+        let (a, b) = (w(src), w(dst));
+        let ok = unsafe { MoveFileExW(a.as_ptr(), b.as_ptr(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) };
+        if ok != 0 {
+            return Ok(());
+        }
+        // Destination ouverte par un autre programme (ERROR_ACCESS_DENIED…) : std::fs::rename
+        // réessaie avec la sémantique POSIX de Windows 10+ (FileRenameInfoEx), qui le permet.
+        let first = std::io::Error::last_os_error();
+        std::fs::rename(src, dst).map_err(|_| first)
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::rename(src, dst)?;
+        if let Some(dir) = dst.parent() {
+            if let Ok(d) = std::fs::File::open(dir) {
+                let _ = d.sync_all();
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Écrit `content` dans `path` de façon atomique (fichier .tmp + remplacement), avec réessais
+/// si le fichier est momentanément verrouillé (antivirus, indexation, OneDrive…).
+fn atomic_write<R>(path: &Path, tmp: &Path, content: &[u8], rename: &R) -> Result<(), String>
+where
+    R: Fn(&Path, &Path) -> std::io::Result<()>,
+{
+    use std::io::Write;
+    let write_tmp = || -> std::io::Result<()> {
+        let mut file = std::fs::File::create(tmp)?;
+        file.write_all(content)?;
+        file.sync_all()
+    };
+    if let Err(e) = write_tmp() {
+        let _ = std::fs::remove_file(tmp);
+        return Err(format!("Écriture impossible : {e}"));
+    }
+    let mut last_err = None;
+    for attempt in 0..6u64 {
+        match rename(tmp, path) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                std::thread::sleep(std::time::Duration::from_millis(60 * (attempt + 1)));
+            }
+        }
+    }
+    let _ = std::fs::remove_file(tmp);
+    Err(format!(
+        "Sauvegarde impossible (fichier verrouillé ?) : {}. Vos données précédentes sont conservées.",
+        last_err.map(|e| e.to_string()).unwrap_or_default()
+    ))
+}
+
+/// Sauvegarde sûre, identique sous Linux, macOS et Windows.
+fn save_json_file(f: &Path, content: &str) -> Result<(), String> {
+    save_json_file_with(f, content, true, replace_file)
+}
+
+/// Même chose, avec la fonction de remplacement injectable (tests d'échec) et le choix de mettre à jour
+/// ou non la copie .bak. Étapes : validation → .bak atomique de la version actuelle si elle est valide →
+/// écriture atomique du nouveau contenu. Un échec à n'importe quelle étape laisse le fichier principal intact.
+fn save_json_file_with<R>(f: &Path, content: &str, update_bak: bool, rename: R) -> Result<(), String>
+where
+    R: Fn(&Path, &Path) -> std::io::Result<()>,
+{
+    parse_valid(content).map_err(|e| format!("Données invalides : {e}"))?;
+    if update_bak {
+        if let Ok(cur) = std::fs::read_to_string(f) {
+            if parse_valid(&cur).is_ok() {
+                // Échec du .bak non bloquant : la sauvegarde principale reste prioritaire.
+                let _ = atomic_write(&f.with_extension("json.bak"), &f.with_extension("json.bak.tmp"), cur.as_bytes(), &rename);
+            }
+        }
+    }
+    atomic_write(f, &f.with_extension("json.tmp"), content.as_bytes(), &rename)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    fn dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("sxm-test-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+    fn read(p: &Path) -> String { std::fs::read_to_string(p).unwrap() }
+
+    #[test]
+    fn cinquante_sauvegardes_sur_fichier_existant() {
+        let f = dir("rep").join("sxm-pdf-donnees.json");
+        std::fs::write(&f, "{\"n\":-1}").unwrap(); // fichier déjà présent
+        for i in 0..60 {
+            save_json_file(&f, &format!("{{\"n\":{i}}}")).unwrap();
+            assert_eq!(load_json_file(&f).unwrap(), format!("{{\"n\":{i}}}"));
+        }
+        assert_eq!(read(&f.with_extension("json.bak")), "{\"n\":58}");
+        assert!(!f.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn echec_de_renommage_garde_les_donnees_precedentes() {
+        let f = dir("ren").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        let calls = Cell::new(0);
+        let r = save_json_file_with(&f, "{\"v\":3}", true, |_, _| {
+            calls.set(calls.get() + 1);
+            Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "verrouillé"))
+        });
+        assert!(r.is_err());
+        // 6 tentatives pour le .bak (non bloquant) + 6 tentatives pour le fichier principal
+        assert_eq!(calls.get(), 12, "6 + 6 tentatives attendues");
+        assert_eq!(read(&f), "{\"v\":2}", "le fichier précédent doit rester intact");
+        assert!(!f.with_extension("json.tmp").exists(), "le temporaire doit être supprimé");
+        assert_eq!(load_json_file(&f).unwrap(), "{\"v\":2}");
+    }
+
+    #[test]
+    fn renommage_reussi_apres_verrou_temporaire() {
+        let f = dir("lock").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        let calls = Cell::new(0);
+        save_json_file_with(&f, "{\"v\":2}", true, |a, b| {
+            calls.set(calls.get() + 1);
+            if calls.get() < 3 { Err(std::io::Error::new(std::io::ErrorKind::Other, "antivirus")) } else { replace_file(a, b) }
+        })
+        .unwrap();
+        assert_eq!(read(&f), "{\"v\":2}");
+    }
+
+    #[test]
+    fn fichier_temporaire_impossible_a_creer() {
+        let f = dir("tmp").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        std::fs::create_dir_all(f.with_extension("json.tmp").join("bloque")).unwrap(); // le .tmp est un dossier
+        assert!(save_json_file(&f, "{\"v\":2}").is_err());
+        assert_eq!(read(&f), "{\"v\":1}");
+    }
+
+    #[test]
+    fn json_invalide_refuse_sans_toucher_au_fichier() {
+        let f = dir("inv").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"ok\":1}").unwrap();
+        for bad in ["{pas du json", "[1,2]", "null", "\"texte\"", ""] {
+            assert!(save_json_file(&f, bad).is_err(), "devait refuser {bad:?}");
+        }
+        assert_eq!(read(&f), "{\"ok\":1}");
+        assert!(!f.with_extension("json.bak").exists(), "un refus ne doit pas créer de .bak");
+    }
+
+    #[test]
+    fn lecture_corrompue_restauree_depuis_bak() {
+        let f = dir("cor").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        std::fs::write(&f, "{\"v\":2, tronqu").unwrap();
+        assert_eq!(load_json_file(&f).unwrap(), "{\"v\":1}");
+        save_json_file(&f, "{\"v\":3}").unwrap();
+        assert_eq!(read(&f.with_extension("json.bak")), "{\"v\":1}", "le .bak valide ne doit pas être écrasé par un fichier corrompu");
+    }
+
+    #[test]
+    fn sans_copie_de_secours() {
+        let d = dir("nobak");
+        let f = d.join("sxm-pdf-donnees.json");
+        assert_eq!(load_json_file(&f).unwrap(), "{}", "premier lancement");
+        std::fs::write(&f, "corrompu").unwrap();
+        assert!(load_json_file(&f).is_err(), "corrompu sans .bak : erreur explicite, pas de données vides silencieuses");
+        assert!(restore_backup_file(&f).is_err());
+        assert_eq!(read(&f), "corrompu", "le fichier n'est pas effacé");
+    }
+
+    #[test]
+    fn fichier_illisible_mis_de_cote_sans_perte() {
+        let f = dir("quar").join("sxm-pdf-donnees.json");
+        std::fs::write(&f, "corrompu").unwrap();
+        let q = quarantine_file(&f).unwrap();
+        assert_eq!(read(Path::new(&q)), "corrompu");
+        assert_eq!(load_json_file(&f).unwrap(), "{}");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        assert_eq!(read(Path::new(&q)), "corrompu", "la copie mise de côté n'est jamais écrasée");
+    }
+
+    #[test]
+    fn restauration_manuelle_depuis_bak() {
+        let f = dir("rest").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        assert_eq!(restore_backup_file(&f).unwrap(), "{\"v\":1}");
+        assert_eq!(read(&f), "{\"v\":1}");
+        assert_eq!(read(&f.with_extension("json.bak")), "{\"v\":1}");
+        std::fs::write(f.with_extension("json.bak"), "abîmé").unwrap();
+        assert!(restore_backup_file(&f).is_err());
+        assert_eq!(read(&f), "{\"v\":1}");
+    }
+
+    // ---------------------------------------------------------------- tests ajoutés (corrections finales)
+
+    const SIG: &str = "data:image/png;base64,AAAA";
+
+    #[test]
+    fn remplacement_d_un_fichier_existant() {
+        // Vérifié sur chaque système par la CI (Windows : MoveFileExW REPLACE_EXISTING | WRITE_THROUGH)
+        let d = dir("repl");
+        let (a, b) = (d.join("a.json"), d.join("b.json"));
+        std::fs::write(&b, "ancien").unwrap();
+        std::fs::write(&a, "nouveau").unwrap();
+        replace_file(&a, &b).unwrap();
+        assert_eq!(read(&b), "nouveau");
+        assert!(!a.exists());
+        for i in 0..20 { // remplacements répétés d'un fichier présent
+            std::fs::write(&a, format!("v{i}")).unwrap();
+            replace_file(&a, &b).unwrap();
+            assert_eq!(read(&b), format!("v{i}"));
+        }
+    }
+
+    #[test]
+    fn sauvegarde_pendant_qu_un_lecteur_garde_le_fichier_ouvert() {
+        // Cas réel sous Windows : antivirus / indexeur qui lit le fichier pendant la sauvegarde
+        let f = dir("open").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        let handle = std::fs::File::open(&f).unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        drop(handle);
+        assert_eq!(read(&f), "{\"v\":2}");
+    }
+
+    #[test]
+    fn bak_de_structure_invalide_refuse() {
+        let f = dir("bakinv").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"sxm.initials\":\"OK\"}").unwrap();
+        let bad_baks = [
+            "{\"sxm.signatures\":\"pas une liste\"}",
+            "{\"sxm.signatures\":[{\"src\":\"javascript:x\",\"ratio\":2}]}",
+            "{\"sxm.signatures\":[null]}",
+            "{\"sxm.stamps\":[{\"label\":\"X\"}]}",
+            "{\"sxm.initials\":12}",
+            "{\"sxm.batchProfiles\":[{\"name\":\"P\",\"par\":null,\"sig\":{},\"stamp\":{},\"out\":{},\"pw\":false}]}",
+            "{\"sxm.watermarkTemplates\":[{\"name\":\"M\",\"opt\":{}}]}",
+            "[1,2]",
+        ];
+        for bak in bad_baks {
+            std::fs::write(f.with_extension("json.bak"), bak).unwrap();
+            let r = restore_backup_file(&f);
+            assert!(r.is_err(), "devait refuser {bak}");
+            assert_eq!(read(&f), "{\"sxm.initials\":\"OK\"}", "le fichier principal ne doit pas changer");
+        }
+    }
+
+    #[test]
+    fn bak_de_format_plus_recent_refuse() {
+        let f = dir("bakfmt").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"_format\":1}").unwrap();
+        std::fs::write(f.with_extension("json.bak"), "{\"_format\":2,\"sxm.initials\":\"X\"}").unwrap();
+        assert!(restore_backup_file(&f).unwrap_err().contains("incompatible"));
+        assert_eq!(read(&f), "{\"_format\":1}");
+        assert!(save_json_file(&f, "{\"_format\":0}").is_err());
+        assert!(save_json_file(&f, "{\"_format\":\"1\"}").is_err());
+    }
+
+    #[test]
+    fn bak_valide_complet_restaure() {
+        let f = dir("bakok").join("sxm-pdf-donnees.json");
+        let good = format!(
+            "{{\"_format\":1,\"sxm.signatures\":[{{\"src\":\"{SIG}\",\"ratio\":3}}],\"sxm.stamps\":[{{\"label\":\"REÇU\",\"color\":\"#1d4ed8\"}}],\"sxm.initials\":\"L.H.\",\"sxm.watermarkTemplates\":[{{\"name\":\"RH\",\"opt\":{{\"text\":\"CONFIDENTIEL\"}}}}],\"sxm.batchProfiles\":[{{\"name\":\"Contrats\",\"par\":{{}},\"sig\":{{}},\"stamp\":{{}},\"out\":{{}},\"pw\":true}}]}}"
+        );
+        save_json_file(&f, &good).unwrap();
+        save_json_file(&f, "{\"_format\":1}").unwrap();
+        assert_eq!(restore_backup_file(&f).unwrap(), good);
+        assert_eq!(read(&f), good);
+    }
+
+    #[test]
+    fn echec_de_restauration_conserve_le_fichier_principal() {
+        let f = dir("restfail").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        let r = restore_backup_file_with(&f, |_, _| Err(std::io::Error::new(std::io::ErrorKind::PermissionDenied, "verrouillé")));
+        assert!(r.is_err());
+        assert_eq!(read(&f), "{\"v\":2}");
+        assert_eq!(read(&f.with_extension("json.bak")), "{\"v\":1}");
+    }
+
+    #[test]
+    fn contenu_de_structure_invalide_jamais_ecrit() {
+        let f = dir("structinv").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        assert!(save_json_file(&f, "{\"sxm.signatures\":{}}").is_err());
+        assert!(save_json_file(&f, "{\"sxm.stamps\":[\"texte\"]}").is_err());
+        assert_eq!(read(&f), "{\"v\":1}");
+    }
+
+    #[test]
+    fn operations_simultanees_sans_corruption() {
+        // 8 rédacteurs × 25 sauvegardes + 4 lecteurs + restaurations + mise de côté, en parallèle,
+        // tous via le verrou unique : chaque lecture doit toujours obtenir un JSON valide.
+        let f = std::sync::Arc::new(dir("conc").join("sxm-pdf-donnees.json"));
+        save_json_file(&f, "{\"w\":0,\"i\":0}").unwrap();
+        let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let bad = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut hs = vec![];
+        for w in 0..8 {
+            let f = f.clone();
+            hs.push(std::thread::spawn(move || {
+                for i in 0..25 {
+                    with_data_lock(|| save_json_file(&f, &format!("{{\"w\":{w},\"i\":{i}}}"))).unwrap();
+                }
+            }));
+        }
+        let mut readers = vec![];
+        for _ in 0..4 {
+            let (f, stop, bad) = (f.clone(), stop.clone(), bad.clone());
+            readers.push(std::thread::spawn(move || {
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    let s = with_data_lock(|| load_json_file(&f));
+                    if s.map(|s| parse_valid(&s).is_err()).unwrap_or(true) { bad.fetch_add(1, std::sync::atomic::Ordering::Relaxed); }
+                }
+            }));
+        }
+        {
+            let f = f.clone();
+            hs.push(std::thread::spawn(move || {
+                for _ in 0..10 { let _ = with_data_lock(|| restore_backup_file(&f)); }
+            }));
+        }
+        for h in hs { h.join().unwrap(); }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        for r in readers { r.join().unwrap(); }
+        assert_eq!(bad.load(std::sync::atomic::Ordering::Relaxed), 0, "aucune lecture corrompue");
+        assert!(parse_valid(&read(&f)).is_ok());
+        assert!(parse_valid(&read(&f.with_extension("json.bak"))).is_ok());
+        assert!(!f.with_extension("json.tmp").exists());
+        assert!(!f.with_extension("json.bak.tmp").exists());
+        // mise de côté pendant que tout est au repos, deux fois de suite : jamais d'écrasement
+        let q1 = with_data_lock(|| quarantine_file(&f)).unwrap();
+        save_json_file(&f, "{\"apres\":1}").unwrap();
+        let q2 = with_data_lock(|| quarantine_file(&f)).unwrap();
+        assert_ne!(q1, q2);
+        assert!(Path::new(&q1).exists() && Path::new(&q2).exists());
+    }
+
+    #[test]
+    fn interruption_pendant_une_sauvegarde() {
+        let f = dir("crash").join("sxm-pdf-donnees.json");
+        save_json_file(&f, "{\"v\":1}").unwrap();
+        save_json_file(&f, "{\"v\":2}").unwrap();
+        // Coupure après l'écriture partielle du temporaire (avant le remplacement)
+        std::fs::write(f.with_extension("json.tmp"), "{\"v\":3, coupu").unwrap();
+        std::fs::write(f.with_extension("json.bak.tmp"), "{\"v\":").unwrap();
+        assert_eq!(load_json_file(&f).unwrap(), "{\"v\":2}", "le temporaire abandonné est ignoré");
+        save_json_file(&f, "{\"v\":3}").unwrap();
+        assert_eq!(read(&f), "{\"v\":3}");
+        assert_eq!(read(&f.with_extension("json.bak")), "{\"v\":2}");
+        // Coupure qui aurait laissé un fichier principal tronqué : récupération par le .bak
+        std::fs::write(&f, "{\"v\":4, tron").unwrap();
+        assert_eq!(load_json_file(&f).unwrap(), "{\"v\":2}");
+    }
+
+    #[test]
+    fn soixante_sauvegardes_avec_bak_toujours_valide() {
+        let f = dir("sixty").join("sxm-pdf-donnees.json");
+        std::fs::write(&f, "{\"n\":-1}").unwrap();
+        for i in 0..60 {
+            save_json_file(&f, &format!("{{\"_format\":1,\"n\":{i}}}")).unwrap();
+            assert!(parse_valid(&read(&f.with_extension("json.bak"))).is_ok());
+        }
+        assert_eq!(read(&f), "{\"_format\":1,\"n\":59}");
+    }
+
+}
+
+/// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
+#[tauri::command]
+async fn data_read_backup(app: tauri::AppHandle) -> Result<String, String> {
+    let f = data_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        with_data_lock(|| std::fs::read_to_string(f.with_extension("json.bak")).map_err(|_| "Aucune copie de secours disponible.".to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Remplace le fichier de données par sa copie de secours .bak, si elle est valide. Renvoie le contenu restauré.
+#[tauri::command]
+async fn data_restore_backup(app: tauri::AppHandle) -> Result<String, String> {
+    let f = data_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || with_data_lock(|| restore_backup_file(&f))).await.map_err(|e| e.to_string())?
+}
+
+/// Met de côté un fichier de données illisible (sans le supprimer) pour repartir proprement.
+#[tauri::command]
+async fn data_quarantine(app: tauri::AppHandle) -> Result<String, String> {
+    let f = data_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || with_data_lock(|| quarantine_file(&f))).await.map_err(|e| e.to_string())?
+}
+
+/// Déplace le fichier vers un nom unique, sans jamais écraser une copie déjà mise de côté.
+fn quarantine_file(f: &Path) -> Result<String, String> {
+    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let mut dest = f.with_file_name(format!("sxm-pdf-donnees.illisible-{ts}.json"));
+    let mut n = 1;
+    while dest.exists() {
+        dest = f.with_file_name(format!("sxm-pdf-donnees.illisible-{ts}-{n}.json"));
+        n += 1;
+    }
+    std::fs::rename(f, &dest).map_err(|e| format!("Impossible de mettre de côté le fichier : {e}"))?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// Restauration depuis le .bak : refusée si le .bak est absent, illisible, de structure incorrecte ou d'un
+/// format plus récent. Dans ce cas le fichier principal n'est pas touché.
+fn restore_backup_file(f: &Path) -> Result<String, String> {
+    restore_backup_file_with(f, replace_file)
+}
+
+fn restore_backup_file_with<R>(f: &Path, rename: R) -> Result<String, String>
+where
+    R: Fn(&Path, &Path) -> std::io::Result<()>,
+{
+    let bak = f.with_extension("json.bak");
+    let s = std::fs::read_to_string(&bak).map_err(|_| "Aucune copie de secours disponible.".to_string())?;
+    parse_valid(&s).map_err(|e| format!("La copie de secours est invalide ou incompatible ({e}). Rien n'a été modifié."))?;
+    // On n'écrase pas le .bak avec le fichier actuel (qui peut être celui qu'on écarte).
+    save_json_file_with(f, &s, false, rename)?;
+    Ok(s)
+}
+
+#[tauri::command]
+fn data_path(app: tauri::AppHandle) -> Result<String, String> {
+    data_file(&app).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Indique quels outils externes sont présents (LibreOffice, qpdf).
+#[tauri::command]
+fn check_tools(app: tauri::AppHandle) -> serde_json::Value {
+    serde_json::json!({ "libreoffice": find_soffice(&app).is_some(), "qpdf": find_qpdf(&app).is_some() })
+}
+
+/// Dossier temporaire pour les fichiers à envoyer / imprimer.
+#[tauri::command]
+fn temp_path(name: String) -> String {
+    let dir = std::env::temp_dir().join("sxm-pdf-envoi");
+    let _ = std::fs::create_dir_all(&dir);
+    dir.join(name.replace(['/', '\\'], "_")).to_string_lossy().to_string()
+}
+
+/// Nom du fichier .desktop installé par le paquet (ex. « SXM PDF.desktop »).
+#[cfg(target_os = "linux")]
+fn find_desktop_id() -> Result<String, String> {
+    let home_apps = std::env::var("HOME").map(|h| format!("{h}/.local/share/applications")).unwrap_or_default();
+    let dirs = ["/usr/share/applications", "/usr/local/share/applications", home_apps.as_str()];
+    dirs.iter()
+        .filter_map(|d| std::fs::read_dir(d).ok())
+        .flatten()
+        .flatten()
+        .find(|e| {
+            e.path().extension().map(|x| x == "desktop").unwrap_or(false)
+                && std::fs::read_to_string(e.path())
+                    .map(|c| c.contains("Exec=sxm-pdf"))
+                    .unwrap_or(false)
+        })
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .ok_or_else(|| "Fichier de lancement introuvable : installez d'abord le paquet .rpm.".to_string())
+}
+
+/// Épingle SXM PDF dans la barre des favoris (GNOME) ou le Dock (macOS), avec l'accord de l'utilisateur.
+/// Renvoie "ok", "deja" ou une erreur ; sous Windows, "windows" (épinglage automatique interdit par le système).
+#[tauri::command]
+fn pin_app() -> Result<String, String> {
+    #[cfg(target_os = "linux")]
+    {
+        let id = find_desktop_id()?;
+        let out = Command::new("gsettings")
+            .args(["get", "org.gnome.shell", "favorite-apps"])
+            .output()
+            .map_err(|_| "Bureau non compatible : faites un clic droit sur l'icône de SXM PDF puis « Ajouter aux favoris ».".to_string())?;
+        if !out.status.success() {
+            return Err("Bureau non compatible : faites un clic droit sur l'icône de SXM PDF puis « Ajouter aux favoris ».".into());
+        }
+        let cur = String::from_utf8_lossy(&out.stdout).to_string();
+        // Format : ['a.desktop', 'b.desktop'] ou @as []
+        let mut apps: Vec<String> = cur
+            .trim()
+            .trim_start_matches("@as")
+            .trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .split(',')
+            .map(|s| s.trim().trim_matches('\'').to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if apps.iter().any(|a| a == &id) {
+            return Ok("deja".into());
+        }
+        apps.push(id);
+        let list = format!(
+            "[{}]",
+            apps.iter().map(|a| format!("'{}'", a.replace('\'', ""))).collect::<Vec<_>>().join(", ")
+        );
+        let st = Command::new("gsettings")
+            .args(["set", "org.gnome.shell", "favorite-apps", &list])
+            .status()
+            .map_err(|e| e.to_string())?;
+        return if st.success() { Ok("ok".into()) } else { Err("gsettings a échoué".into()) };
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let app = exe
+            .ancestors()
+            .find(|p| p.extension().map(|x| x == "app").unwrap_or(false))
+            .ok_or("Lancez SXM PDF depuis le dossier Applications pour l'ajouter au Dock.")?
+            .to_string_lossy()
+            .to_string();
+        let cur = Command::new("defaults")
+            .args(["read", "com.apple.dock", "persistent-apps"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        if cur.contains(&app) || cur.contains(&app.replace(' ', "%20")) {
+            return Ok("deja".into());
+        }
+        let tile = format!(
+            "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>{app}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>"
+        );
+        Command::new("defaults")
+            .args(["write", "com.apple.dock", "persistent-apps", "-array-add", &tile])
+            .status()
+            .map_err(|e| e.to_string())?;
+        let _ = Command::new("killall").arg("Dock").status();
+        return Ok("ok".into());
+    }
+    #[cfg(windows)]
+    {
+        return Ok("windows".into());
+    }
+}
+
+/// Définit SXM PDF comme lecteur PDF par défaut — uniquement à la demande de l'utilisateur.
+#[tauri::command]
+fn set_default_pdf() -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    {
+        let desktop = find_desktop_id()?;
+        let st = Command::new("xdg-mime")
+            .args(["default", &desktop, "application/pdf"])
+            .status()
+            .map_err(|e| e.to_string())?;
+        return if st.success() { Ok(()) } else { Err("xdg-mime a échoué".into()) };
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Windows impose que l'utilisateur confirme lui-même dans les Paramètres.
+        Command::new("cmd")
+            .args(["/C", "start", "ms-settings:defaultapps"])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        return Err("Choisissez SXM PDF pour « .pdf » dans la fenêtre Paramètres qui vient de s'ouvrir.".into());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return Err("Sur macOS : clic droit sur un PDF > Lire les informations > Ouvrir avec : SXM PDF > Tout modifier.".into());
+    }
+}
+
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // Une seule fenêtre : un nouveau lancement transmet ses arguments.
+            let args: Vec<String> = argv.into_iter().skip(1).collect();
+            let _ = app.emit("sxm-args", args);
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
+        .invoke_handler(tauri::generate_handler![
+            startup_args,
+            read_bytes,
+            write_bytes,
+            office_convert,
+            capture_screen,
+            set_default_pdf,
+            pdf_encrypt,
+            pdf_decrypt,
+            remove_temp,
+            send_mail,
+            pin_app,
+            data_load,
+            data_save,
+            data_path,
+            data_restore_backup,
+            data_read_backup,
+            data_quarantine,
+            check_tools,
+            temp_path
+        ])
+        .run(tauri::generate_context!())
+        .expect("Erreur au démarrage de SXM PDF");
+}
