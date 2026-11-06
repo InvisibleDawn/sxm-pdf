@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SXM PDF</title>
+</head>
+<body>
+  <div id="app">
+    <!-- Barre latérale d'applications (style nouvel Outlook) -->
+    <nav id="rail">
+      <div class="rail-logo" title="SXM PDF"><img src="/logo.png" alt="SXM PDF" /></div>
+      <button class="rail-btn" data-act="open" title="Ouvrir (Ctrl+O)"><i data-lucide="folder-open"></i><span>Ouvrir</span></button>
+      <button class="rail-btn" data-act="capture" title="Capture d'écran (Ctrl+Maj+X)"><i data-lucide="scissors"></i><span>Capture</span></button>
+      <button class="rail-btn" data-act="signature" title="Signer"><i data-lucide="signature"></i><span>Signer</span></button>
+      <button class="rail-btn" data-act="batch" title="Traitement par lot"><i data-lucide="package"></i><span>Lot</span></button>
+      <button class="rail-btn" data-act="send" title="Envoyer par mail"><i data-lucide="send"></i><span>Envoyer</span></button>
+      <div class="rail-spacer"></div>
+      <button class="rail-btn small" data-act="pin" title="Épingler dans la barre des favoris"><i data-lucide="pin"></i></button>
+      <button class="rail-btn small" data-act="theme" title="Thème clair / sombre"><i data-lucide="sun-moon"></i></button>
+      <button class="rail-btn small" data-act="about" title="À propos"><i data-lucide="info"></i></button>
+    </nav>
+
+    <div id="column">
+      <header id="topbar">
+        <div id="tabs"></div>
+        <div class="top-actions">
+          <button class="ghost" data-act="save" title="Enregistrer (Ctrl+S)"><i data-lucide="save"></i></button>
+          <button class="ghost" data-act="print" title="Imprimer (Ctrl+P)"><i data-lucide="printer"></i></button>
+          <button class="btn accent" data-act="send" title="Envoyer par mail avec le PDF en pièce jointe"><i data-lucide="send"></i> Envoyer</button>
+          <div class="menu">
+            <button class="ghost" data-menu="more" title="Plus"><i data-lucide="ellipsis"></i></button>
+            <div class="menu-pop right" id="menu-more">
+              <button data-act="saveas">Enregistrer sous… <kbd>Ctrl+Maj+S</kbd></button>
+              <button data-act="default-pdf">Définir comme lecteur PDF par défaut</button>
+              <button data-act="pin">Épingler dans la barre des favoris</button>
+              <hr />
+              <button data-act="export-data">Sauvegarder mes signatures et réglages…</button>
+              <button data-act="import-data">Restaurer une sauvegarde…</button>
+              <hr />
+              <button data-act="about">À propos de SXM PDF</button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Ruban simplifié (style nouvel Outlook) -->
+      <section id="ribbon">
+        <div class="rib-tabs">
+          <button data-rib="home" class="on">Accueil</button>
+          <button data-rib="annotate">Annoter</button>
+          <button data-rib="sign">Signer & masquer</button>
+          <button data-rib="pages">Pages</button>
+          <button data-rib="tools">Outils</button>
+        </div>
+
+        <div class="rib-panel" data-panel="home">
+          <button data-act="open"><i data-lucide="folder-open"></i><span>Ouvrir</span></button>
+          <button data-act="save"><i data-lucide="save"></i><span>Enregistrer</span></button>
+          <button data-act="print"><i data-lucide="printer"></i><span>Imprimer</span></button>
+          <span class="sep"></span>
+          <button data-act="undo" title="Annuler (Ctrl+Z)"><i data-lucide="undo-2"></i><span>Annuler</span></button>
+          <button data-act="redo" title="Rétablir (Ctrl+Y)"><i data-lucide="redo-2"></i></button>
+          <span class="sep"></span>
+          <button data-tool="select" title="Sélection (V)"><i data-lucide="mouse-pointer-2"></i><span>Sélection</span></button>
+          <button data-tool="highlight" title="Surligner (H)"><i data-lucide="highlighter"></i><span>Surligner</span></button>
+          <button data-tool="text" title="Texte (T)"><i data-lucide="type"></i><span>Texte</span></button>
+          <button data-act="signature"><i data-lucide="signature"></i><span>Signer</span></button>
+          <button data-act="stamp"><i data-lucide="stamp"></i><span>Tampon</span></button>
+          <span class="sep"></span>
+          <button data-act="capture" class="accent-btn"><i data-lucide="scissors"></i><span>Capture</span></button>
+        </div>
+
+        <div class="rib-panel hidden" data-panel="annotate">
+          <button data-tool="select" title="Sélection (V)"><i data-lucide="mouse-pointer-2"></i></button>
+          <button data-tool="highlight" title="Surligner le texte (H)"><i data-lucide="highlighter"></i><span>Surligner</span></button>
+          <button data-tool="underline" title="Souligner (U)"><i data-lucide="underline"></i></button>
+          <button data-tool="strike" title="Barrer (K)"><i data-lucide="strikethrough"></i></button>
+          <button data-tool="hlarea" title="Surligner une zone"><i data-lucide="square-dashed"></i><span>Zone</span></button>
+          <span id="hlcolors" title="Couleur du surligneur">
+            <button class="hl-sw on" data-hl="#facc15" style="--c:#facc15" title="Jaune"></button>
+            <button class="hl-sw" data-hl="#4ade80" style="--c:#4ade80" title="Vert"></button>
+            <button class="hl-sw" data-hl="#60a5fa" style="--c:#60a5fa" title="Bleu"></button>
+            <button class="hl-sw" data-hl="#f472b6" style="--c:#f472b6" title="Rose"></button>
+            <button class="hl-sw" data-hl="#fb923c" style="--c:#fb923c" title="Orange"></button>
+          </span>
+          <span class="sep"></span>
+          <button data-tool="text" title="Texte (T)"><i data-lucide="type"></i></button>
+          <button data-tool="note" title="Note (N)"><i data-lucide="message-square"></i></button>
+          <button data-tool="ink" title="Stylo (P)"><i data-lucide="pencil"></i></button>
+          <button data-tool="lasso" title="Entourer (O)"><i data-lucide="lasso"></i><span>Entourer</span></button>
+          <label class="chk" title="Remplir légèrement la zone entourée"><input type="checkbox" id="lassofill" /> remplir</label>
+          <button data-tool="rect" title="Rectangle (R)"><i data-lucide="square"></i></button>
+          <button data-tool="ellipse" title="Ellipse (E)"><i data-lucide="circle"></i></button>
+          <button data-tool="arrow" title="Flèche (A)"><i data-lucide="move-up-right"></i></button>
+          <button data-tool="line" title="Ligne (L)"><i data-lucide="minus"></i></button>
+          <span class="sep"></span>
+          <input type="color" id="color" value="#e11d48" title="Couleur" />
+          <select id="width" title="Épaisseur">
+            <option value="1">Fin</option><option value="2" selected>Moyen</option><option value="4">Épais</option><option value="7">Très épais</option>
+          </select>
+          <select id="fontsize" title="Taille du texte">
+            <option value="10">10 pt</option><option value="12" selected>12 pt</option><option value="14">14 pt</option><option value="18">18 pt</option><option value="24">24 pt</option>
+          </select>
+          <button data-act="delete" title="Supprimer l'annotation (Suppr)"><i data-lucide="trash"></i></button>
+        </div>
+
+        <div class="rib-panel hidden" data-panel="sign">
+          <button data-act="signature"><i data-lucide="signature"></i><span>Signer</span></button>
+          <button data-act="paraphe"><i data-lucide="pen-line"></i><span>Parapher</span></button>
+          <button data-act="stamp"><i data-lucide="stamp"></i><span>Tampon</span></button>
+          <button data-act="watermark"><i data-lucide="droplet"></i><span>Filigrane</span></button>
+          <button data-act="insert-image"><i data-lucide="image-plus"></i><span>Image</span></button>
+          <span class="sep"></span>
+          <button data-tool="redact" title="Masquer une zone (M)"><i data-lucide="eye-off"></i><span>Masquer</span></button>
+          <select id="redactmode" title="Type de masquage"><option value="blur">Flou</option><option value="black">Noir</option></select>
+          <button data-act="search-redact" title="IBAN, n° de sécu, e-mails, téléphones…"><i data-lucide="search"></i><span>Masquer par recherche</span></button>
+          <span class="sep"></span>
+          <button data-act="protect"><i data-lucide="lock"></i><span>Mot de passe</span></button>
+          <button data-act="unprotect" title="Retirer le mot de passe"><i data-lucide="lock-open"></i></button>
+        </div>
+
+        <div class="rib-panel hidden" data-panel="pages">
+          <button data-act="insert-pdf"><i data-lucide="file-plus"></i><span>Ajouter un PDF</span></button>
+          <button data-act="insert-image-page"><i data-lucide="file-image"></i><span>Ajouter une image</span></button>
+          <button data-act="extract"><i data-lucide="file-output"></i><span>Extraire</span></button>
+          <span class="sep"></span>
+          <button data-act="merge"><i data-lucide="combine"></i><span>Fusionner</span></button>
+          <button data-act="split"><i data-lucide="split"></i><span>Diviser</span></button>
+        </div>
+
+        <div class="rib-panel hidden" data-panel="tools">
+          <button data-act="office2pdf"><i data-lucide="file-text"></i><span>Office → PDF</span></button>
+          <button data-act="img2pdf"><i data-lucide="image"></i><span>Images → PDF</span></button>
+          <button data-act="pdf2png"><i data-lucide="file-image"></i><span>PDF → PNG</span></button>
+          <button data-act="pdf2txt"><i data-lucide="file-down"></i><span>PDF → texte</span></button>
+          <button data-act="pdf2docx"><i data-lucide="file-text"></i><span>PDF → Word</span></button>
+          <span class="sep"></span>
+          <button data-act="batch"><i data-lucide="package"></i><span>Traitement par lot</span></button>
+          <button data-act="paraphe"><i data-lucide="pen-line"></i><span>Parapher tout</span></button>
+          <button data-act="watermark"><i data-lucide="droplet"></i><span>Filigrane</span></button>
+        </div>
+      </section>
+
+      <main id="main">
+        <aside id="sidebar">
+          <div class="side-tabs">
+            <button data-side="pages" class="on">Pages</button>
+            <button data-side="annots">Annotations</button>
+          </div>
+          <div id="side-pages" class="side-pane">
+            <div class="side-actions">
+              <button data-act="insert-pdf" title="Ajouter les pages d'un autre PDF">+ PDF</button>
+              <button data-act="insert-image-page" title="Ajouter une image comme page">+ Image</button>
+              <button data-act="extract" title="Extraire des pages vers un nouveau PDF">Extraire</button>
+            </div>
+            <div id="thumbs"></div>
+          </div>
+          <div id="side-annots" class="side-pane hidden"><div id="annot-list"></div></div>
+        </aside>
+        <section id="docs">
+          <div id="empty">
+            <div class="hello">
+              <h1>Bonjour 👋</h1>
+              <p>Que voulez-vous faire aujourd'hui ?</p>
+            </div>
+            <div class="empty-grid">
+              <button data-act="open"><span class="ic" style="--ic:#0f6cbd"><i data-lucide="folder-open"></i></span><b>Ouvrir un PDF</b><span class="sub">Ctrl+O</span></button>
+              <button data-act="office2pdf"><span class="ic" style="--ic:#7c3aed"><i data-lucide="file-text"></i></span><b>Convertir un document</b><span class="sub">Word, Excel, PowerPoint</span></button>
+              <button data-act="batch"><span class="ic" style="--ic:#059669"><i data-lucide="package"></i></span><b>Traitement par lot</b><span class="sub">Signer, tamponner, parapher</span></button>
+              <button data-act="capture"><span class="ic" style="--ic:#ea580c"><i data-lucide="scissors"></i></span><b>Capture d'écran</b><span class="sub">Ctrl+Maj+X</span></button>
+            </div>
+            <p class="hint">Ou glissez-déposez vos fichiers ici.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer id="statusbar">
+        <span id="status-left">SXM PDF</span>
+        <span class="grow"></span>
+        <span id="pageinfo"></span>
+        <button data-act="zoom-out" title="Zoom arrière"><i data-lucide="zoom-out"></i></button>
+        <select id="zoom">
+          <option value="page-width">Largeur</option><option value="page-fit">Page entière</option>
+          <option value="0.75">75 %</option><option value="1">100 %</option><option value="1.25">125 %</option><option value="1.5">150 %</option><option value="2">200 %</option>
+        </select>
+        <button data-act="zoom-in" title="Zoom avant"><i data-lucide="zoom-in"></i></button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="sel-pop" class="hidden">
+    <button data-mark="highlight">Surligner</button>
+    <button data-mark="underline"><u>Souligner</u></button>
+    <button data-mark="strike"><s>Barrer</s></button>
+    <button data-mark="copy">Copier</button>
+  </div>
+  <div id="modal-root"></div>
+  <div id="print-root"></div>
+  <div id="toasts"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+# Compile SXM PDF pour Windows, macOS et Linux sur les serveurs de GitHub.
+# Lancement : à chaque tag "v*" (ex. v1.0.0) ou manuellement (onglet Actions > Run workflow).
+name: Compiler SXM PDF
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: msi,nsis
+          - os: macos-latest
+            bundles: dmg
+          - os: ubuntu-22.04
+            bundles: rpm,deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+
+      - name: Dépendances Linux
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm
+
+      # LibreOffice embarqué pour Windows (conversions Office hors ligne)
+      - name: Embarquer LibreOffice (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          choco install libreoffice-fresh qpdf -y --no-progress
+          New-Item -ItemType Directory -Force src-tauri/libreoffice, src-tauri/qpdf | Out-Null
+          Copy-Item -Recurse "C:\Program Files\LibreOffice\*" src-tauri/libreoffice/
+          $q = Get-ChildItem "C:\Program Files\qpdf*" -Directory | Select-Object -First 1
+          Copy-Item -Recurse "$($q.FullName)\*" src-tauri/qpdf/
+          $conf = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
+          # Ajoute LibreOffice et qpdf aux ressources existantes (licences) sans les écraser
+          $conf.bundle.resources | Add-Member -NotePropertyName "libreoffice/" -NotePropertyValue "libreoffice/" -Force
+          $conf.bundle.resources | Add-Member -NotePropertyName "qpdf/" -NotePropertyValue "qpdf/" -Force
+          $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
+
+      - name: Embarquer LibreOffice (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install --cask libreoffice
+          brew install qpdf   # pour le test ; sur le Mac final : brew install qpdf
+          cp -R /Applications/LibreOffice.app src-tauri/LibreOffice.app
+          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.bundle.resources={...(c.bundle.resources||{}),'LibreOffice.app/':'LibreOffice.app/'};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+
+      - run: npm ci || npm install
+      # Tests de fiabilité de la sauvegarde, exécutés sur Windows, macOS et Linux.
+      # La compilation s'arrête si un test échoue.
+      - name: Tests Rust (sauvegarde des données)
+        shell: bash
+        run: |
+          npm run build
+          cargo test --release --manifest-path src-tauri/Cargo.toml
+      - name: Compiler
+        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sxm-pdf-${{ matrix.os }}
+          path: |
+            src-tauri/target/**/release/bundle/msi/*.msi
+            src-tauri/target/**/release/bundle/nsis/*.exe
+            src-tauri/target/**/release/bundle/dmg/*.dmg
+            src-tauri/target/**/release/bundle/rpm/*.rpm
+            src-tauri/target/**/release/bundle/deb/*.deb
