@@ -63,10 +63,12 @@ export const TOOL_INFO = {
     fedora: "sudo dnf install libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-pdfimport",
     debian: "sudo apt install libreoffice-writer libreoffice-calc libreoffice-impress",
     mac: "brew install --cask libreoffice",
+    windows: "winget install --id TheDocumentFoundation.LibreOffice -e",
   },
   qpdf: {
     label: "qpdf", why: "les mots de passe (protéger, ouvrir ou retirer)",
     fedora: "sudo dnf install qpdf", debian: "sudo apt install qpdf", mac: "brew install qpdf",
+    windows: "winget install --id QPDF.QPDF -e",
   },
 };
 export let toolCache = null;
@@ -77,7 +79,10 @@ export async function ensureTool(name) {
   if (toolCache[name]) return true;
   const info = TOOL_INFO[name];
   const isMacOS = navigator.userAgent.includes("Mac");
-  const cmds = isMacOS ? [["macOS (Homebrew)", info.mac]] : [["Fedora", info.fedora], ["Ubuntu / Debian", info.debian]];
+  const isWindows = navigator.userAgent.includes("Windows");
+  const cmds = isWindows
+    ? [["Windows (Invite de commandes ou PowerShell)", info.windows]]
+    : isMacOS ? [["macOS (Homebrew)", info.mac]] : [["Fedora", info.fedora], ["Ubuntu / Debian", info.debian]];
   await modal((m, close) => m.append(
     el("h2", {}, `${info.label} est nécessaire`),
     el("p", {}, `SXM PDF utilise ${info.label} pour ${info.why}. Il n'est pas installé sur cet ordinateur. Le reste de l'application fonctionne normalement.`),
@@ -86,7 +91,9 @@ export async function ensureTool(name) {
       el("div", { class: "row" },
         el("code", { style: "flex:1;padding:8px 10px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);user-select:text;font-size:12px" }, cmd),
         el("button", { class: "btn", onclick: async () => { try { await navigator.clipboard.writeText(cmd); toast("Commande copiée."); } catch { toast("Sélectionnez la commande et copiez-la (Ctrl+C).", true); } } }, "Copier")))),
-    el("p", { style: "font-size:12px" }, "Collez la commande dans un terminal, puis relancez l'action. Inutile de redémarrer SXM PDF."),
+    el("p", { style: "font-size:12px" }, isWindows
+      ? "Ouvrez « Invite de commandes » depuis le menu Démarrer, collez la commande, validez, puis relancez l'action. Vous pouvez aussi réinstaller SXM PDF, qui inclut normalement cet outil."
+      : "Collez la commande dans un terminal, puis relancez l'action. Inutile de redémarrer SXM PDF."),
     el("div", { class: "row end" }, el("button", { class: "btn accent", onclick: () => close() }, "Compris"))));
   return false;
 }

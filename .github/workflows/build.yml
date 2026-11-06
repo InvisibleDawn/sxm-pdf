@@ -79,11 +79,18 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          choco install qpdf -y --no-progress --execution-timeout=480
-          $q = Get-ChildItem "C:\Program Files\qpdf*" -Directory | Select-Object -First 1
+          # Binaire officiel publié par le projet qpdf (github.com/qpdf/qpdf), sans installation système
+          gh release download --repo qpdf/qpdf --pattern "qpdf-*-msvc64.zip" --dir $env:RUNNER_TEMP --clobber
+          $zip = Get-ChildItem "$env:RUNNER_TEMP\qpdf-*-msvc64.zip" | Select-Object -First 1
+          Expand-Archive $zip.FullName -DestinationPath "$env:RUNNER_TEMP\qpdfx" -Force
+          $root = Get-ChildItem "$env:RUNNER_TEMP\qpdfx" -Directory | Select-Object -First 1
           New-Item -ItemType Directory -Force src-tauri/qpdf | Out-Null
-          Copy-Item -Recurse "$($q.FullName)\*" src-tauri/qpdf/
+          Copy-Item -Recurse "$($root.FullName)\*" src-tauri/qpdf/
+          if (!(Test-Path src-tauri/qpdf/bin/qpdf.exe)) { throw "qpdf.exe introuvable dans l'archive" }
+          & src-tauri/qpdf/bin/qpdf.exe --version
           $conf = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
           $conf.bundle.resources | Add-Member -NotePropertyName "qpdf/" -NotePropertyValue "qpdf/" -Force
           $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
@@ -107,9 +114,19 @@ jobs:
         timeout-minutes: 30
         continue-on-error: true
         run: |
-          brew install --cask libreoffice
-          brew install qpdf   # pour le test ; sur le Mac final : brew install qpdf
-          cp -R /Applications/LibreOffice.app src-tauri/LibreOffice.app
+          # Téléchargement direct sur le site officiel (le lien Homebrew était périmé).
+          # Version x86_64 : fonctionne sur Mac Intel et, via Rosetta, sur Mac Apple Silicon.
+          set -e
+          BASE=https://download.documentfoundation.org/libreoffice/stable
+          for V in $(curl -fsSL "$BASE/" | grep -oE 'href="[0-9]+\.[0-9]+\.[0-9]+/' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -Vr | uniq); do
+            URL="$BASE/$V/mac/x86_64/LibreOffice_${V}_MacOS_x86-64.dmg"
+            if curl -fL --retry 3 -o "$RUNNER_TEMP/lo.dmg" "$URL"; then echo "LibreOffice $V"; break; fi
+          done
+          test -s "$RUNNER_TEMP/lo.dmg"
+          hdiutil attach -nobrowse -readonly -mountpoint "$RUNNER_TEMP/lo" "$RUNNER_TEMP/lo.dmg"
+          cp -R "$RUNNER_TEMP/lo/LibreOffice.app" src-tauri/LibreOffice.app
+          hdiutil detach "$RUNNER_TEMP/lo"
+          test -x src-tauri/LibreOffice.app/Contents/MacOS/soffice
           node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.bundle.resources={...(c.bundle.resources||{}),'LibreOffice.app/':'LibreOffice.app/'};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
       - run: npm ci || npm install
