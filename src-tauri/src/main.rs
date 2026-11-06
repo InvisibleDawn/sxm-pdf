@@ -184,12 +184,23 @@ fn find_qpdf(app: &tauri::AppHandle) -> Option<PathBuf> {
             }
         }
     }
-    let candidates: &[&str] = if cfg!(windows) {
-        &[r"C:\Program Files\qpdf\bin\qpdf.exe"]
-    } else {
-        &["/usr/bin/qpdf", "/usr/local/bin/qpdf", "/opt/homebrew/bin/qpdf"]
-    };
-    candidates.iter().map(PathBuf::from).find(|p| p.exists())
+    if cfg!(windows) {
+        // winget / Chocolatey installent dans « C:\Program Files\qpdf 12.x.x\bin »
+        for base in [r"C:\Program Files", r"C:\Program Files (x86)"] {
+            if let Ok(rd) = std::fs::read_dir(base) {
+                for e in rd.flatten() {
+                    if e.file_name().to_string_lossy().to_lowercase().starts_with("qpdf") {
+                        let p = e.path().join("bin").join("qpdf.exe");
+                        if p.exists() {
+                            return Some(p);
+                        }
+                    }
+                }
+            }
+        }
+        return None;
+    }
+    ["/usr/bin/qpdf", "/usr/local/bin/qpdf", "/opt/homebrew/bin/qpdf"].iter().map(PathBuf::from).find(|p| p.exists())
 }
 
 fn run_qpdf(app: &tauri::AppHandle, args: Vec<String>) -> Result<(), String> {
