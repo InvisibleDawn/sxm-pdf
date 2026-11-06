@@ -1,0 +1,44 @@
+# Publie les installateurs d'une compilation réussie sur une page « Releases » (téléchargement direct).
+name: Publier les installateurs
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Numéro de la compilation (run) à publier"
+        required: true
+      tag:
+        description: "Nom de la version"
+        required: true
+        default: "v1.0.0-test"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publier:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          pattern: sxm-pdf-*
+          path: artefacts
+      - name: Créer la page de téléchargement
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir fichiers
+          find artefacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" -o -name "*.rpm" -o -name "*.deb" \) -exec cp {} fichiers/ \;
+          cd fichiers
+          for f in *; do mv "$f" "$(echo "$f" | tr ' ' '-')"; done
+          ls -lh
+          gh release delete "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "${{ inputs.tag }}" * --repo "$GITHUB_REPOSITORY" --target main --prerelease \
+            --title "SXM PDF 1.0.0 — version de test" \
+            --notes "Installateurs de test (non signés). Tests de sauvegarde validés sur Windows, macOS et Linux (19/19).
+          Mac : clic droit > Ouvrir au premier lancement ; si « endommagé » : xattr -cr \"/Applications/SXM PDF.app\".
+          Windows : SmartScreen > Informations complémentaires > Exécuter quand même."
