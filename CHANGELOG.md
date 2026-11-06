@@ -51,9 +51,15 @@ Repères pour vérifier cette version : `fn replace_file(` et `static DATA_LOCK`
   avec création du .bak ; fichier corrompu sans .bak mis de côté intact (`illisible-….json`).
 - Non-régression : 14 scénarios de fonctions PDF réussis ; texte masqué absent du fichier produit.
 
+### Résultats GitHub Actions (2026-11-06, dépôt InvisibleDawn/sxm-pdf)
+- **Windows Server 2025** (windows-2025-vs2026) : **19 réussis, 0 échec** (23,6 s) — code `replace_file`
+  Windows compilé et validé, dont le remplacement d'un fichier existant et le fichier ouvert par un autre programme.
+- **Ubuntu 22.04** : **19 réussis, 0 échec** (4,7 s).
+- **macOS 15.7.9** (Mac Intel, runner macos-15-intel) : **19 réussis, 0 échec** (9,9 s).
+
 ### Non testé
-- **Windows et macOS : aucun test exécuté à ce jour.** Le code Windows (`replace_file`) n'a pas pu être
-  compilé ici ; il le sera, avec les 19 tests, par la première exécution de GitHub Actions.
+- Mac **Apple Silicon** (M1–M4) : les machines arm64 de GitHub n'ont pas été disponibles (3 tentatives
+  annulées faute de machine). Le code de sauvegarde est identique sur Mac Intel et Apple Silicon.
 - Comportement avec un antivirus ou OneDrive réels.
 
 ## 2026-11-06 (10 h 45) — Fiabilisation des données utilisateur

@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        # macos-15-intel : les Mac Apple Silicon de GitHub sont souvent indisponibles (file d'attente)
+        os: [windows-latest, macos-15-intel, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -51,7 +52,7 @@ jobs:
         include:
           - os: windows-latest
             bundles: msi,nsis
-          - os: macos-latest
+          - os: macos-15-intel
             bundles: dmg
           - os: ubuntu-22.04
             bundles: rpm,deb
@@ -62,7 +63,7 @@ jobs:
         with: { node-version: 22 }
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ startsWith(matrix.os, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
       - uses: swatinem/rust-cache@v2
         with: { workspaces: src-tauri }
 
@@ -102,7 +103,7 @@ jobs:
           $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
 
       - name: Embarquer LibreOffice (macOS)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         timeout-minutes: 30
         continue-on-error: true
         run: |
@@ -113,7 +114,7 @@ jobs:
 
       - run: npm ci || npm install
       - name: Compiler
-        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ startsWith(matrix.os, 'macos') && '--target universal-apple-darwin' || '' }}
 
       - uses: actions/upload-artifact@v4
         with:
