@@ -1,5 +1,14 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-06 (17 h 40) — Installateurs complets
+
+- Windows : qpdf 12.4.2 embarqué (publications officielles github.com/qpdf) en plus de LibreOffice ;
+  aide « outil nécessaire » avec commandes winget ; détection de qpdf dans « Program Files\qpdf* ».
+- macOS : LibreOffice 26.8.2 embarqué (téléchargé sur download.documentfoundation.org).
+- GitHub Actions run 42296229226 : tests 19/19 sur Windows, macOS 15 (Intel) et Ubuntu 22.04,
+  puis installateurs .msi/.exe, .dmg universel, .rpm/.deb produits.
+- Non embarqué : qpdf sur macOS (`brew install qpdf`, l'application l'indique). Installateurs non signés.
+
 ## 2026-11-06 (11 h 40) — v4 : sauvegardes multiplateformes, validation des .bak, verrou Rust
 
 **Statut : NON prêt pour la commercialisation** tant que les tests Windows et macOS n'ont pas été exécutés
