@@ -135,12 +135,13 @@ async fn office_convert(
 }
 
 /// Capture d'écran. Sous Linux (Wayland/GNOME) : passe par le portail système,
-/// qui affiche son propre sélecteur de zone. Ailleurs : capture de l'écran principal,
-/// le recadrage se fait ensuite dans l'éditeur de SXM PDF.
+/// qui affiche son propre sélecteur de zone. macOS : outil de sélection natif (screencapture -i).
+/// Windows : capture de l'écran principal, le recadrage se fait ensuite dans l'éditeur.
 #[tauri::command]
-async fn capture_screen() -> Result<String, String> {
+async fn capture_screen(app: tauri::AppHandle) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     {
+        let _ = &app;
         use ashpd::desktop::screenshot::Screenshot;
         let resp = Screenshot::request()
             .interactive(true)
@@ -156,22 +157,88 @@ async fn capture_screen() -> Result<String, String> {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-        let mon = monitors
-            .into_iter()
-            .find(|m| m.is_primary().unwrap_or(false))
-            .ok_or("Aucun écran trouvé")?;
-        let img = mon.capture_image().map_err(|e| e.to_string())?;
-        let path = std::env::temp_dir().join(format!(
-            "sxm-capture-{}.png",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0)
-        ));
-        img.save(&path).map_err(|e| e.to_string())?;
-        Ok(path.to_string_lossy().to_string())
+        // On masque SXM PDF le temps de la capture (côté Rust : aucune permission JS requise),
+        // et on la réaffiche quoi qu'il arrive.
+        let win = app.get_webview_window("main");
+        if let Some(w) = &win {
+            let _ = w.hide();
+        }
+        tokio_sleep_ms(400).await;
+        let res = tauri::async_runtime::spawn_blocking(grab_screen)
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+        if let Some(w) = &win {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+        res
     }
+}
+
+#[cfg(not(target_os = "linux"))]
+async fn tokio_sleep_ms(ms: u64) {
+    let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(std::time::Duration::from_millis(ms))).await;
+}
+
+#[cfg(not(target_os = "linux"))]
+fn capture_temp_path() -> PathBuf {
+    std::env::temp_dir().join(format!(
+        "sxm-capture-{}.png",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0)
+    ))
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
+}
+
+/// macOS : outil de sélection natif (comme Cmd+Maj+4). Échap = capture annulée.
+#[cfg(target_os = "macos")]
+fn grab_screen() -> Result<String, String> {
+    // Sans l'autorisation « Enregistrement de l'écran », macOS ne capture que le fond d'écran.
+    if !unsafe { CGPreflightScreenCaptureAccess() } {
+        unsafe { CGRequestScreenCaptureAccess() };
+        return Err("macOS doit autoriser SXM PDF à capturer l'écran : Réglages Système > Confidentialité et sécurité > Enregistrement de l'écran et de l'audio système > activez SXM PDF, puis quittez et rouvrez l'application.".into());
+    }
+    let path = capture_temp_path();
+    let st = Command::new("/usr/sbin/screencapture")
+        .args(["-i", "-x"])
+        .arg(&path)
+        .status()
+        .map_err(|e| format!("screencapture introuvable : {e}"))?;
+    if !st.success() || !path.exists() {
+        return Err("Capture annulée".into());
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Windows : capture de l'écran principal, le recadrage se fait dans l'éditeur.
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos")))]
+fn grab_screen() -> Result<String, String> {
+    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
+    let mon = monitors
+        .into_iter()
+        .find(|m| m.is_primary().unwrap_or(false))
+        .ok_or("Aucun écran trouvé")?;
+    let img = mon.capture_image().map_err(|e| e.to_string())?;
+    let path = capture_temp_path();
+    img.save(&path).map_err(|e| e.to_string())?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Impression native de la fenêtre (macOS : WKWebView ignore window.print()).
+#[tauri::command]
+fn print_window(app: tauri::AppHandle) -> Result<(), String> {
+    let w = app.get_webview_window("main").ok_or("Fenêtre introuvable")?;
+    w.print().map_err(|e| e.to_string())
 }
 
 /// Cherche qpdf : copie embarquée puis système.
@@ -1139,6 +1206,7 @@ fn main() {
             write_bytes,
             office_convert,
             capture_screen,
+            print_window,
             set_default_pdf,
             pdf_encrypt,
             pdf_decrypt,
