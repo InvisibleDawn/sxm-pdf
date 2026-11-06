@@ -5,10 +5,46 @@ name: Compiler SXM PDF
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    branches: [main]   # à chaque envoi : tests seuls (rapide)
+    tags: ["v*"]       # à chaque version : tests + installateurs
 
 jobs:
+  # 1) Tests de fiabilité de la sauvegarde sur les trois systèmes — rapide, sans LibreOffice.
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - name: Dépendances Linux
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - run: npm ci || npm install
+      - name: Tests Rust (sauvegarde des données)
+        shell: bash
+        run: |
+          npm run build
+          cargo test --release --manifest-path src-tauri/Cargo.toml -- --test-threads=1 2>&1 | tee test-results.txt
+          exit ${PIPESTATUS[0]}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: resultats-tests-${{ matrix.os }}
+          path: test-results.txt
+
+  # 2) Installateurs — seulement si les tests passent, au lancement manuel ou sur un tag de version.
   build:
+    needs: tests
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -35,23 +71,40 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev rpm
 
       # LibreOffice embarqué pour Windows (conversions Office hors ligne)
-      - name: Embarquer LibreOffice (Windows)
+      # qpdf (petit) puis LibreOffice (≈350 Mo). Limités dans le temps : si l'embarquement échoue,
+      # l'installateur est produit sans LibreOffice (l'application l'indique alors à l'utilisateur).
+      - name: Embarquer qpdf (Windows)
         if: matrix.os == 'windows-latest'
+        timeout-minutes: 10
+        continue-on-error: true
         shell: pwsh
         run: |
-          choco install libreoffice-fresh qpdf -y --no-progress
-          New-Item -ItemType Directory -Force src-tauri/libreoffice, src-tauri/qpdf | Out-Null
-          Copy-Item -Recurse "C:\Program Files\LibreOffice\*" src-tauri/libreoffice/
+          choco install qpdf -y --no-progress --execution-timeout=480
           $q = Get-ChildItem "C:\Program Files\qpdf*" -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Force src-tauri/qpdf | Out-Null
           Copy-Item -Recurse "$($q.FullName)\*" src-tauri/qpdf/
           $conf = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
-          # Ajoute LibreOffice et qpdf aux ressources existantes (licences) sans les écraser
-          $conf.bundle.resources | Add-Member -NotePropertyName "libreoffice/" -NotePropertyValue "libreoffice/" -Force
           $conf.bundle.resources | Add-Member -NotePropertyName "qpdf/" -NotePropertyValue "qpdf/" -Force
+          $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
+
+      - name: Embarquer LibreOffice (Windows)
+        if: matrix.os == 'windows-latest'
+        timeout-minutes: 30
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          choco install libreoffice-fresh -y --no-progress --execution-timeout=1500
+          New-Item -ItemType Directory -Force src-tauri/libreoffice | Out-Null
+          Copy-Item -Recurse "C:\Program Files\LibreOffice\*" src-tauri/libreoffice/
+          # Ajouté aux ressources existantes (licences) sans les écraser, seulement si la copie a réussi
+          $conf = Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json
+          $conf.bundle.resources | Add-Member -NotePropertyName "libreoffice/" -NotePropertyValue "libreoffice/" -Force
           $conf | ConvertTo-Json -Depth 20 | Set-Content src-tauri/tauri.conf.json
 
       - name: Embarquer LibreOffice (macOS)
         if: matrix.os == 'macos-latest'
+        timeout-minutes: 30
+        continue-on-error: true
         run: |
           brew install --cask libreoffice
           brew install qpdf   # pour le test ; sur le Mac final : brew install qpdf
@@ -59,13 +112,6 @@ jobs:
           node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.bundle.resources={...(c.bundle.resources||{}),'LibreOffice.app/':'LibreOffice.app/'};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
       - run: npm ci || npm install
-      # Tests de fiabilité de la sauvegarde, exécutés sur Windows, macOS et Linux.
-      # La compilation s'arrête si un test échoue.
-      - name: Tests Rust (sauvegarde des données)
-        shell: bash
-        run: |
-          npm run build
-          cargo test --release --manifest-path src-tauri/Cargo.toml
       - name: Compiler
         run: npx tauri build --bundles ${{ matrix.bundles }} ${{ matrix.os == 'macos-latest' && '--target universal-apple-darwin' || '' }}
 
