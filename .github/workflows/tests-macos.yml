@@ -1,0 +1,29 @@
+# Tests de sauvegarde sur plusieurs modèles de machines macOS proposés par GitHub
+# (utile lorsque « macos-latest » n'a pas de machine disponible).
+name: Tests macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-14, macos-15-intel, macos-13]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with: { workspaces: src-tauri }
+      - run: npm ci || npm install
+      - name: Tests Rust (sauvegarde des données)
+        shell: bash
+        run: |
+          sw_vers || true
+          npm run build
+          cargo test --release --manifest-path src-tauri/Cargo.toml -- --test-threads=1
