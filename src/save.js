@@ -88,6 +88,14 @@ export async function printDoc() {
     doc.destroy();
     await Promise.all([...root.querySelectorAll("img")].map((im) => im.decode().catch(() => {})));
   });
+  if (io.isMac) {
+    // WKWebView (macOS) ignore window.print() : on passe par l'impression native de Tauri.
+    // La fenêtre d'impression est asynchrone : #print-root reste en place (invisible à l'écran)
+    // jusqu'à la prochaine impression, sinon la page imprimée sortirait blanche.
+    try { await invoke("print_window"); }
+    catch (e) { toast("Impression impossible : " + (e?.message || e), true); }
+    return;
+  }
   window.print();
   setTimeout(() => root.replaceChildren(), 1500);
 }

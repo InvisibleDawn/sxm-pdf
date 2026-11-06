@@ -17,6 +17,15 @@ export const POSITIONS = [
 const INIT_KEY = "sxm.initials";
 const getInitials = () => db.get(INIT_KEY, "") || "";
 const setInitials = (v) => db.set(INIT_KEY, v);
+// Style d'écriture des initiales tapées : « neutre » (Arial) par défaut, ou « manuscrit ».
+const INIT_STYLE_KEY = "sxm.initialsStyle";
+export const INITIAL_STYLES = [["neutre", "Neutre (Arial)"], ["manuscrit", "Manuscrite"]];
+const getInitialsStyle = () => (db.get(INIT_STYLE_KEY, "neutre") === "manuscrit" ? "manuscrit" : "neutre");
+const setInitialsStyle = (v) => db.set(INIT_STYLE_KEY, v);
+const INITIAL_FONTS = {
+  neutre: '600 96px Arial, Helvetica, "Liberation Sans", "DejaVu Sans", sans-serif',
+  manuscrit: 'italic 600 96px "Segoe Script", "Brush Script MT", "URW Chancery L", "Z003", cursive',
+};
 
 /** Rectangle PDF d'un élément w×h (points) placé à une position de la page affichée. */
 export function posBox(vp1, pos, w, h, margin = 28) {
@@ -28,13 +37,13 @@ export function posBox(vp1, pos, w, h, margin = 28) {
   return norm(x1, y1, x2, y2);
 }
 
-/** Image des initiales tapées au clavier, dans un style manuscrit. */
-export function initialsImage(text, color = "#0f172a") {
+/** Image des initiales tapées au clavier (style neutre ou manuscrit). */
+export function initialsImage(text, color = "#0f172a", style = getInitialsStyle()) {
   const c = document.createElement("canvas");
   c.width = 60 + text.length * 70; c.height = 170;
   const ctx = c.getContext("2d");
   ctx.fillStyle = color;
-  ctx.font = 'italic 600 96px "Segoe Script", "Brush Script MT", "URW Chancery L", "Z003", cursive';
+  ctx.font = INITIAL_FONTS[style] || INITIAL_FONTS.neutre;
   ctx.textBaseline = "middle";
   ctx.fillText(text, 20, 85);
   return trimCanvas(c);
@@ -61,10 +70,12 @@ export function parapheDialog(nPages) {
     const initials = textIn("Vos initiales, ex. L.H.", getInitials(), "max-width:200px");
     const preview = el("div", { style: "min-height:60px;display:flex;align-items:center;justify-content:center;background:#fff;border:1px dashed var(--border);border-radius:8px;padding:6px" });
     const showPreview = () => {
-      const m2 = mark || (initials.value.trim() ? initialsImage(initials.value.trim()) : null);
+      const m2 = mark || (initials.value.trim() ? initialsImage(initials.value.trim(), undefined, style.value) : null);
       preview.replaceChildren(m2 ? el("img", { src: m2.src, style: "max-height:56px" }) : el("span", { style: "color:#94a3b8" }, "Aperçu"));
     };
+    const style = sel(INITIAL_STYLES, getInitialsStyle());
     initials.addEventListener("input", () => { mark = null; showPreview(); });
+    style.addEventListener("change", () => { mark = null; showPreview(); });
     const pos = sel(POSITIONS, "bas-droite");
     const size = sel([["45", "Petit"], ["60", "Moyen"], ["80", "Grand"]], "60");
     const skipLast = el("input", { type: "checkbox" });
@@ -72,7 +83,7 @@ export function parapheDialog(nPages) {
     m.append(
       el("h2", {}, "✍️ Parapher toutes les pages"),
       el("p", {}, `Vos initiales seront posées au même endroit sur les ${nPages} pages. Vous pourrez ensuite en déplacer une si besoin.`),
-      el("div", { class: "row" }, initials,
+      el("div", { class: "row" }, initials, "Écriture :", style,
         el("button", { class: "btn", onclick: async () => { const sg = await signatureDialog(); if (sg) { mark = sg; showPreview(); } } }, "…ou utiliser une signature enregistrée")),
       preview,
       el("div", { class: "row" }, "Position :", pos, "Taille :", size),
@@ -81,9 +92,9 @@ export function parapheDialog(nPages) {
         el("button", { class: "btn", onclick: () => close(null) }, "Annuler"),
         el("button", { class: "btn accent", onclick: () => {
           const txt = initials.value.trim();
-          const mk = mark || (txt ? initialsImage(txt) : null);
+          const mk = mark || (txt ? initialsImage(txt, undefined, style.value) : null);
           if (!mk) return toast("Tapez vos initiales ou choisissez une signature.", true);
-          if (!mark) setInitials(txt);
+          if (!mark) { setInitials(txt); setInitialsStyle(style.value); }
           close({ mark: mk, pos: pos.value, width: +size.value, skipLast: skipLast.checked });
         } }, "Parapher")));
   });

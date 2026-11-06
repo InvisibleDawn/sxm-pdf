@@ -1,5 +1,20 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-06 (19 h 30) — Corrections après essais sur Mac
+
+- **Impression (macOS)** : WKWebView ignore `window.print()`. Nouvelle commande Rust `print_window`
+  (impression native Tauri) appelée sur Mac ; le contenu à imprimer reste en place tant que la
+  fenêtre d'impression est ouverte (elle est asynchrone). Windows/Linux inchangés.
+- **Capture d'écran** : l'erreur « plugin:window|minimize not allowed by ACL » venait du masquage
+  de la fenêtre côté JavaScript. La fenêtre est désormais masquée puis réaffichée côté Rust
+  (`capture_screen`), toujours réaffichée même en cas d'erreur. Sur Mac : outil de sélection natif
+  (`screencapture -i`, comme Cmd+Maj+4, Échap = annuler) et vérification de l'autorisation
+  « Enregistrement de l'écran » avec message explicatif. Windows : capture xcap inchangée
+  (xcap n'est plus compilé pour macOS).
+- **Initiales** : choix « Écriture : Neutre (Arial) / Manuscrite » dans « Parapher toutes les pages » ;
+  Neutre par défaut, choix mémorisé et repris par le traitement par lot.
+- Tests Rust 19/19 (Linux).
+
 ## 2026-11-06 (17 h 40) — Installateurs complets
 
 - Windows : qpdf 12.4.2 embarqué (publications officielles github.com/qpdf) en plus de LibreOffice ;

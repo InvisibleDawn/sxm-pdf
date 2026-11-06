@@ -89,15 +89,14 @@ export async function pdfToDocx() {
 // ======================================================================= Capture
 
 export async function doCapture() {
+  // La fenêtre est masquée puis réaffichée côté Rust (capture_screen) : plus besoin
+  // des permissions minimize/unminimize, et la fenêtre revient même en cas d'erreur.
   let path;
   try {
-    if (!io.isLinux) { await appWindow.minimize(); await new Promise((r) => setTimeout(r, 450)); }
     path = await io.captureScreen();
   } catch (e) {
     if (!String(e).includes("annulée")) toast(String(e), true);
     return;
-  } finally {
-    if (!io.isLinux) { await appWindow.unminimize(); await appWindow.setFocus(); }
   }
   const res = await captureEditor(await io.readFile(path), !!tab());
   if (!res) return;

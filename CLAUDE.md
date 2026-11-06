@@ -30,7 +30,8 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 ## État au 2026-11-06
 - Tests de sauvegarde 19/19 sur Windows Server 2025, macOS 15.7 (Intel), Ubuntu 22.04.
 - Windows : LibreOffice + qpdf 12.4.2 embarqués. Mac : LibreOffice 26.8.2 embarqué, qpdf à installer (brew).
-- En cours : Invisible_Dawn teste le .dmg sur un MacBook Pro 2018 (Intel).
+- En cours : Invisible_Dawn teste le .dmg sur un MacBook Pro 2018 (Intel). Corrigés le 06/11 soir : impression Mac
+  (`print_window`), capture (masquage côté Rust, `screencapture -i` sur Mac), initiales en écriture neutre.
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 
 export const isLinux = navigator.userAgent.includes("Linux");
+export const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
 
 export async function readFile(path) {
   const buf = await invoke("read_bytes", { path });
