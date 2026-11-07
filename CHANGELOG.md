@@ -1,5 +1,19 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 5 : multiplateforme
+
+- **M1 (macOS)** : double-clic sur un PDF / « Ouvrir avec » ouvre le fichier (événement `Opened`) ; les
+  fichiers reçus avant que l'interface soit prête sont gardés et remis au démarrage. À confirmer sur Mac.
+- **M2 (macOS)** : qpdf et ses bibliothèques embarqués dans le .dmg (dylibbundler, aucune dépendance
+  Homebrew, vérifié par `otool` dans la compilation). PDF protégés sans rien installer.
+- **M3 (Windows)** : la capture prend l'écran où se trouve la souris (plusieurs écrans).
+- **M4 (Fedora 45)** : nouvelle étape de compilation dans un conteneur Fedora 45 : tests JS et Rust,
+  .rpm construit sur Fedora, installé avec dnf et lancé (l'appli doit tourner 15 s).
+- **M5 (macOS)** : « Envoyer » utilise la messagerie par défaut (Apple Mail ou Outlook) ; sinon le
+  fichier est montré dans le Finder.
+- **M6** : délai de 120 s pour LibreOffice (lot 2). **M7 (macOS)** : chemin protégé dans l'entrée du Dock.
+- Tests Rust 33/33 (nouveaux : messagerie par défaut Mac, fichiers reçus avant l'interface).
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 4 : fichiers temporaires
 
 - **T1** : tous les temporaires (pièces jointes envoyées, conversions, captures, copies déchiffrées,

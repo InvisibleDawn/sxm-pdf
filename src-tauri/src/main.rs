@@ -4,10 +4,38 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::{Emitter, Manager};
 
+/// Fichiers reçus de macOS (double-clic, « Ouvrir avec ») avant que l'interface soit prête.
+static PENDING_OPEN: std::sync::Mutex<(bool, Vec<String>)> = std::sync::Mutex::new((false, Vec::new()));
+
 /// Fichier passé en argument au lancement (ouvrir avec…) ou drapeau --capture.
+/// Sous macOS, les fichiers arrivent par un événement : ceux reçus avant l'interface sont ajoutés ici.
 #[tauri::command]
 fn startup_args() -> Vec<String> {
-    std::env::args().skip(1).collect()
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let mut p = PENDING_OPEN.lock().unwrap_or_else(|e| e.into_inner());
+    p.0 = true; // interface prête : les prochains fichiers sont envoyés directement
+    args.append(&mut p.1);
+    args
+}
+
+/// macOS : fichiers à ouvrir reçus du Finder (événement « Opened »).
+#[cfg(target_os = "macos")]
+fn files_opened(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
+    let paths: Vec<String> = urls.iter().filter_map(|u| u.to_file_path().ok()).map(|p| p.to_string_lossy().to_string()).collect();
+    if paths.is_empty() {
+        return;
+    }
+    let mut p = PENDING_OPEN.lock().unwrap_or_else(|e| e.into_inner());
+    if p.0 {
+        drop(p);
+        let _ = app.emit("sxm-args", paths);
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    } else {
+        p.1.extend(paths);
+    }
 }
 
 /// Lit un fichier et le renvoie en binaire brut (rapide pour les gros PDF).
@@ -276,11 +304,23 @@ fn grab_screen() -> Result<String, String> {
 /// Windows : capture de l'écran principal, le recadrage se fait dans l'éditeur.
 #[cfg(all(not(target_os = "linux"), not(target_os = "macos")))]
 fn grab_screen() -> Result<String, String> {
-    let monitors = xcap::Monitor::all().map_err(|e| e.to_string())?;
-    let mon = monitors
-        .into_iter()
-        .find(|m| m.is_primary().unwrap_or(false))
-        .ok_or("Aucun écran trouvé")?;
+    // Écran où se trouve la souris (plusieurs écrans), sinon l'écran principal
+    #[repr(C)]
+    struct Point { x: i32, y: i32 }
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetCursorPos(p: *mut Point) -> i32;
+    }
+    let mut pt = Point { x: 0, y: 0 };
+    let under_mouse = if unsafe { GetCursorPos(&mut pt) } != 0 { xcap::Monitor::from_point(pt.x, pt.y).ok() } else { None };
+    let mon = match under_mouse {
+        Some(m) => m,
+        None => xcap::Monitor::all()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .ok_or("Aucun écran trouvé")?,
+    };
     let img = mon.capture_image().map_err(|e| e.to_string())?;
     let path = capture_temp_path();
     img.save(&path).map_err(|e| e.to_string())?;
@@ -579,14 +619,44 @@ fn send_mail_impl(path: &str, subject: &str) -> Result<String, String> {
 
 #[cfg(target_os = "macos")]
 fn send_mail_impl(path: &str, _subject: &str) -> Result<String, String> {
-    // Ouvrir un fichier avec Mail crée un nouveau message avec la pièce jointe
-    let st = Command::new("open").args(["-a", "Mail", path]).status().map_err(|e| e.to_string())?;
-    if st.success() {
-        Ok("ok".into())
-    } else {
-        reveal(path);
-        Err("Impossible d'ouvrir Mail. Le fichier est affiché dans le Finder.".into())
+    // Messagerie choisie par l'utilisateur (gestionnaire « mailto »). Apple Mail et Outlook créent
+    // un nouveau message avec la pièce jointe quand on leur ouvre un fichier.
+    let handler = mac_mail_handler().unwrap_or_else(|| "com.apple.mail".into());
+    let supported = ["com.apple.mail", "com.microsoft.outlook"];
+    if supported.contains(&handler.to_lowercase().as_str()) {
+        let st = Command::new("open").args(["-b", &handler, path]).status().map_err(|e| e.to_string())?;
+        if st.success() {
+            return Ok("ok".into());
+        }
     }
+    reveal(path);
+    Err("Votre messagerie ne permet pas l'ajout automatique de pièce jointe. Le fichier est sélectionné dans le Finder : glissez-le dans votre mail.".into())
+}
+
+/// Identifiant de l'application de messagerie par défaut sur macOS (None = Apple Mail par défaut).
+#[cfg(target_os = "macos")]
+fn mac_mail_handler() -> Option<String> {
+    let out = Command::new("defaults")
+        .args(["read", "com.apple.LaunchServices/com.apple.launchservices.secure", "LSHandlers"])
+        .output()
+        .ok()?;
+    parse_mailto_handler(&String::from_utf8_lossy(&out.stdout))
+}
+
+/// Cherche, dans la sortie de `defaults read … LSHandlers`, l'application associée à « mailto ».
+#[cfg(any(target_os = "macos", test))]
+fn parse_mailto_handler(text: &str) -> Option<String> {
+    for block in text.split('}') {
+        if block.contains("LSHandlerURLScheme = mailto") {
+            for line in block.lines() {
+                let l = line.trim();
+                if let Some(v) = l.strip_prefix("LSHandlerRoleAll = ") {
+                    return Some(v.trim_end_matches(';').trim_matches('"').to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 #[cfg(windows)]
@@ -1431,6 +1501,39 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
             assert_eq!(std::fs::metadata(app_temp_dir()).unwrap().permissions().mode() & 0o777, 0o700);
         }
     }
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 5)
+
+    #[test]
+    fn messagerie_par_defaut_mac_lue_dans_les_reglages() {
+        let sortie = r#"(
+    {
+        LSHandlerPreferredVersions = { LSHandlerRoleAll = "-"; };
+        LSHandlerRoleAll = "com.apple.safari";
+        LSHandlerURLScheme = https;
+    },
+    {
+        LSHandlerPreferredVersions = { LSHandlerRoleAll = "-"; };
+        LSHandlerRoleAll = "com.microsoft.outlook";
+        LSHandlerURLScheme = mailto;
+    }
+)"#;
+        assert_eq!(parse_mailto_handler(sortie).as_deref(), Some("com.microsoft.outlook"));
+        assert_eq!(parse_mailto_handler("( )"), None);
+    }
+
+    #[test]
+    fn fichiers_ouverts_avant_l_interface_sont_gardes() {
+        {
+            let mut p = PENDING_OPEN.lock().unwrap();
+            *p = (false, vec!["/Users/utilisateur/contrat.pdf".into()]);
+        }
+        let args = startup_args();
+        assert!(args.contains(&"/Users/utilisateur/contrat.pdf".to_string()));
+        let p = PENDING_OPEN.lock().unwrap();
+        assert!(p.0, "interface marquée prête");
+        assert!(p.1.is_empty(), "liste vidée après remise à l'interface");
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1584,8 +1687,9 @@ fn pin_app() -> Result<String, String> {
         if cur.contains(&app) || cur.contains(&app.replace(' ', "%20")) {
             return Ok("deja".into());
         }
+        let xml = app.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;");
         let tile = format!(
-            "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>{app}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>"
+            "<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>{xml}</string><key>_CFURLStringType</key><integer>0</integer></dict></dict></dict>"
         );
         Command::new("defaults")
             .args(["write", "com.apple.dock", "persistent-apps", "-array-add", &tile])
@@ -1701,6 +1805,12 @@ fn main() {
             check_tools,
             temp_path
         ])
-        .run(tauri::generate_context!())
-        .expect("Erreur au démarrage de SXM PDF");
+        .build(tauri::generate_context!())
+        .expect("Erreur au démarrage de SXM PDF")
+        .run(|_app, _event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                files_opened(_app, urls);
+            }
+        });
 }
