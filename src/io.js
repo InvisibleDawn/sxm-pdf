@@ -58,6 +58,7 @@ export const pdfEncrypt = (input, output, o) =>
 export const pdfDecrypt = (input, password) => invoke("pdf_decrypt", { input, password });
 /** Chemin libre à côté de `path` (« nom (2).pdf »…) : un fichier existant n'est jamais écrasé. */
 export const uniquePath = (path) => invoke("unique_path", { path });
+export const pdfEncryptionInfo = (input, password) => invoke("pdf_encryption_info", { input, password });
 export const removeTemp = (path) => invoke("remove_temp", { path }).catch(() => {});
 export const setDefaultPdf = () => invoke("set_default_pdf");
 

@@ -19,6 +19,7 @@ export async function formBytes(t) {
 
 /** PDF final : formulaires + annotations écrites dans le fichier. */
 export async function buildFinal(t) {
+  if (t.encryptedNoTool) throw new Error("ce PDF est chiffré et qpdf n'est pas installé : impossible de produire une copie lisible.");
   const pdf = await PDFDocument.load(await formBytes(t), { ignoreEncryption: true });
   const vps = new Map();
   await writeAnnots(pdf, t.annots, async (i) => {
@@ -119,6 +120,10 @@ export async function sendDoc() {
 
 export async function saveTab(t = tab(), as = false) {
   if (!t) return false;
+  if (t.encryptedNoTool) {
+    toast("Enregistrement impossible : ce PDF est chiffré et qpdf n'est pas installé. Le fichier d'origine n'a pas été modifié.", true);
+    return false;
+  }
   let path = t.path;
   if (as || !path) {
     path = await io.savePath(t.path || (io.stem(t.name) + ".pdf"));

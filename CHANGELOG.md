@@ -1,5 +1,28 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 3 : sécurité (suite) et sauvegarde
+
+- **Nouveau défaut trouvé et corrigé** : un PDF chiffré sans mot de passe d'ouverture (restrictions
+  seules, fréquent pour les documents officiels) s'affichait, mais une fois annoté et enregistré il
+  devenait illisible. Il est maintenant déchiffré à l'ouverture (`unlockRestricted`) et ses restrictions
+  sont réappliquées à l'enregistrement. Sans qpdf : lecture seule, enregistrement refusé, original intact.
+- **S4** : à la réouverture d'un PDF protégé, les droits d'origine (impression, copie, modification) sont
+  relus (`pdf_encryption_info`) et conservés ; le mot de passe propriétaire est demandé et vérifié, ou
+  remplacé par un mot de passe aléatoire qui maintient les limites. Ouverture avec le mot de passe
+  propriétaire : le mot de passe d'ouverture à conserver est demandé.
+- **S5** : politique de sécurité (CSP) stricte dans la fenêtre ; pdf.js sans `eval` (`isEvalSupported:
+  false`) ; module `fs` de Tauri retiré (inutilisé).
+- **S6** : masquage manuel en noir par défaut, « Flou (moins sûr) » ; pixellisation à blocs plus larges.
+- **B1 (macOS)** : Cmd+Q passe par la fermeture de la fenêtre et propose d'enregistrer (menu « Quitter »
+  remplacé). À confirmer sur Mac.
+- **B2** : le style des initiales est inclus dans l'export, l'import et la restauration (validé).
+- **B3** : la copie des signatures dans le stockage interne de la fenêtre est effacée dès que le fichier
+  de données est écrit avec succès.
+- Tests : `npm test` 9/9 ; Rust 29/29 (nouveau : droits relus et conservés, mauvais mot de passe refusé).
+  Vérifié dans l'appli compilée (Linux) avec la CSP active : affichage, surlignage, Ctrl+S (aucun
+  temporaire laissé) ; PDF restreint : mot de passe propriétaire vérifié, surlignage enregistré, fichier
+  toujours ouvrable sans mot de passe, impression et copie toujours interdites, `qpdf --check` sans erreur.
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 2 : intégrité des conversions et des fichiers de sortie
 
 - **I3** : chaque conversion LibreOffice écrit dans son propre dossier (`convert_with`) ; une conversion

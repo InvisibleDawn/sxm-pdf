@@ -467,6 +467,46 @@ async fn pdf_decrypt(app: tauri::AppHandle, input: String, password: String) -> 
     Ok(out_s)
 }
 
+/// Droits d'un PDF protégé (lus par qpdf avec le mot de passe fourni), pour les conserver
+/// quand le document est réenregistré.
+#[tauri::command]
+async fn pdf_encryption_info(app: tauri::AppHandle, input: String, password: String) -> Result<serde_json::Value, String> {
+    let qpdf = find_qpdf(&app).ok_or("qpdf est introuvable.")?;
+    tauri::async_runtime::spawn_blocking(move || encryption_info_with(&qpdf, &input, &password))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn encryption_info_with(qpdf: &Path, input: &str, password: &str) -> Result<serde_json::Value, String> {
+    let argfile = write_private_argfile(&[format!("--password={password}"), "--show-encryption".into(), input.into()])?;
+    let out = Command::new(qpdf).arg(format!("@{}", argfile.to_string_lossy())).output();
+    let _ = std::fs::remove_file(&argfile);
+    let out = out.map_err(|e| e.to_string())?;
+    let text = String::from_utf8_lossy(&out.stdout).to_string();
+    // qpdf affiche les droits même avec un mauvais mot de passe : on le refuse explicitement
+    if text.contains("Incorrect password supplied") {
+        return Err("MOT_DE_PASSE_INVALIDE".into());
+    }
+    if !matches!(out.status.code(), Some(0) | Some(3)) {
+        let err = String::from_utf8_lossy(&out.stderr).to_string();
+        return Err(if err.contains("invalid password") { "MOT_DE_PASSE_INVALIDE".into() } else { format!("qpdf : {err}") });
+    }
+    Ok(parse_encryption_info(&text))
+}
+
+fn parse_encryption_info(text: &str) -> serde_json::Value {
+    let allowed = |label: &str| {
+        text.lines().find(|l| l.trim_start().starts_with(label)).map(|l| l.trim_end().ends_with(": allowed")).unwrap_or(true)
+    };
+    serde_json::json!({
+        "encrypted": !text.contains("File is not encrypted"),
+        "ownerSupplied": text.contains("Supplied password is owner password"),
+        "print": allowed("print high resolution"),
+        "copy": allowed("extract for any purpose"),
+        "modify": allowed("modify other"),
+    })
+}
+
 /// Supprime un fichier temporaire créé par SXM PDF (uniquement dans le dossier temporaire).
 #[tauri::command]
 fn remove_temp(path: String) {
@@ -662,7 +702,7 @@ fn validate_data(v: &serde_json::Value) -> Result<(), String> {
     }
     let is_str = |o: &serde_json::Map<String, Value>, k: &str| o.get(k).map(|x| x.is_string()).unwrap_or(false);
     let is_obj = |o: &serde_json::Map<String, Value>, k: &str| o.get(k).map(|x| x.is_object()).unwrap_or(false);
-    for key in ["sxm.initials", "sxm.theme", "sxm.welcomed"] {
+    for key in ["sxm.initials", "sxm.initialsStyle", "sxm.theme", "sxm.welcomed"] {
         if let Some(x) = obj.get(key) {
             if !x.is_string() {
                 return Err(format!("« {key} » doit être un texte"));
@@ -1287,6 +1327,39 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
         assert!(bytes.starts_with(b"%PDF"), "un vrai PDF doit être produit");
         assert!(Path::new(&pdf).starts_with(app_temp_dir().join("conversions")));
     }
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 3)
+
+    #[test]
+    fn droits_d_un_pdf_protege_lus_et_conserves() {
+        let Some(qpdf) = system_qpdf() else { eprintln!("qpdf absent : test ignoré"); return };
+        let d = dir("droits");
+        let clair = d.join("clair.pdf");
+        std::fs::write(&clair, mini_pdf()).unwrap();
+        let restreint = d.join("restreint.pdf");
+        let s = |p: &Path| p.to_string_lossy().to_string();
+        let enc = |user: &str, owner: &str, print: &str, extract: &str, modify: &str, out: &Path| {
+            encrypt_with(&qpdf, vec!["--encrypt".into(), user.into(), owner.into(), "256".into(),
+                format!("--print={print}"), format!("--extract={extract}"), format!("--modify={modify}"), "--".into(), s(&clair)], &s(&clair), &s(out)).unwrap()
+        };
+        enc("lecteur", "chef", "none", "n", "none", &restreint);
+        let i = encryption_info_with(&qpdf, &s(&restreint), "lecteur").unwrap();
+        assert_eq!(i["ownerSupplied"], false);
+        assert_eq!((i["print"].as_bool(), i["copy"].as_bool(), i["modify"].as_bool()), (Some(false), Some(false), Some(false)));
+        let o = encryption_info_with(&qpdf, &s(&restreint), "chef").unwrap();
+        assert_eq!(o["ownerSupplied"], true);
+        assert_eq!(encryption_info_with(&qpdf, &s(&restreint), "faux"), Err("MOT_DE_PASSE_INVALIDE".into()));
+        // réenregistrement avec les droits relus : les restrictions sont toujours là
+        let copie = d.join("copie.pdf");
+        enc("lecteur", "chef", if i["print"] == true { "full" } else { "none" }, if i["copy"] == true { "y" } else { "n" }, if i["modify"] == true { "all" } else { "none" }, &copie);
+        let j = encryption_info_with(&qpdf, &s(&copie), "lecteur").unwrap();
+        assert_eq!((j["print"].as_bool(), j["copy"].as_bool(), j["modify"].as_bool()), (Some(false), Some(false), Some(false)));
+        // sans restriction
+        let libre = d.join("libre.pdf");
+        enc("x", "x", "full", "y", "all", &libre);
+        let k = encryption_info_with(&qpdf, &s(&libre), "x").unwrap();
+        assert_eq!((k["print"].as_bool(), k["copy"].as_bool(), k["modify"].as_bool()), (Some(true), Some(true), Some(true)));
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1483,6 +1556,28 @@ fn set_default_pdf() -> Result<(), String> {
     }
 }
 
+/// macOS : menu standard (Édition, Fenêtre…) dont l'élément « Quitter » est remplacé par le nôtre,
+/// sinon Cmd+Q fermerait l'application sans proposer d'enregistrer les documents modifiés.
+#[cfg(target_os = "macos")]
+fn mac_menu(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, MenuItemKind};
+    let menu = Menu::default(app.handle())?;
+    if let Some(MenuItemKind::Submenu(appmenu)) = menu.items()?.into_iter().next() {
+        for it in appmenu.items()? {
+            if let MenuItemKind::Predefined(p) = &it {
+                let t = p.text().unwrap_or_default();
+                if t.starts_with("Quit") || t.starts_with("Quitter") {
+                    appmenu.remove(p)?;
+                }
+            }
+        }
+        let quit = MenuItem::with_id(app, "sxm-quit", "Quitter SXM PDF", true, Some("CmdOrCtrl+Q"))?;
+        appmenu.append(&quit)?;
+    }
+    app.set_menu(menu)?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -1495,7 +1590,20 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
+        .setup(|_app| {
+            #[cfg(target_os = "macos")]
+            mac_menu(_app)?;
+            Ok(())
+        })
+        .on_menu_event(|app, ev| {
+            // « Quitter » (Cmd+Q) passe par la fermeture de la fenêtre : l'interface demande alors
+            // d'enregistrer les documents modifiés, comme avec le bouton rouge.
+            if ev.id().as_ref() == "sxm-quit" {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.close();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             startup_args,
             read_bytes,
@@ -1507,6 +1615,7 @@ fn main() {
             set_default_pdf,
             pdf_encrypt,
             pdf_decrypt,
+            pdf_encryption_info,
             remove_temp,
             send_mail,
             pin_app,

@@ -330,7 +330,9 @@ export function pixelate(src, x, y, w, h, target = null) {
   x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y));
   w = Math.round(Math.min(w, src.width - x)); h = Math.round(Math.min(h, src.height - y));
   if (w < 2 || h < 2) return null;
-  const block = Math.max(14, Math.round(Math.min(w, h) / 4));
+  // Blocs larges (au moins 24 px, soit ~1 ligne de texte au rendu x2,5) : une pixellisation fine
+  // peut parfois être « devinée » pour un numéro court. Le noir reste recommandé.
+  const block = Math.max(24, Math.round(Math.min(w, h) / 2.5));
   const tiny = document.createElement("canvas");
   tiny.width = Math.max(1, Math.round(w / block)); tiny.height = Math.max(1, Math.round(h / block));
   tiny.getContext("2d").drawImage(src, x, y, w, h, 0, 0, tiny.width, tiny.height);
