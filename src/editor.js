@@ -260,6 +260,51 @@ document.addEventListener("mouseup", (e) => {
   }, 10);
 });
 $("#sel-pop").addEventListener("mousedown", (e) => e.preventDefault());
+// ---- Pages scannées (image, sans texte) : rien à sélectionner. Surligner / Souligner / Barrer
+// tracent alors un rectangle sur la zone, au lieu de ne rien faire sans explication.
+function pageHasText(pv) {
+  const tl = pv?.div?.querySelector(".textLayer");
+  return !tl || tl.textContent.trim().length > 0; // couche de texte pas encore prête : on ne touche à rien
+}
+document.addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || state.pending) return;
+  const t = tab(); if (!t) return;
+  const pageDiv = e.target.closest?.(".page");
+  if (!pageDiv || !t.container.contains(pageDiv)) return;
+  if (state.tool !== "select" && !MARK_TOOLS.includes(state.tool)) return;
+  if (e.target.closest("g.annot, [data-handle]")) return; // déplacement d'une annotation existante
+  const i = +pageDiv.dataset.pageNumber - 1;
+  const pv = pageView(t, i);
+  if (!pv || pageHasText(pv)) return;
+  if (state.tool === "select") {
+    if (!t.scanTip) { t.scanTip = true; toast("Cette page est une image (document scanné) : il n'y a pas de texte à sélectionner.\nPour surligner, choisissez Surligner puis tracez un rectangle sur la zone."); }
+    return;
+  }
+  e.preventDefault(); e.stopPropagation();
+  if (!t.scanMarkTip) { t.scanMarkTip = true; toast("Document scanné : tracez un rectangle sur la zone à " + ({ highlight: "surligner", underline: "souligner", strike: "barrer" })[state.tool] + "."); }
+  const [x0, y0] = pdfPoint(pv, e);
+  const a = { id: newId(), page: i, type: state.tool, color: state.tool === "highlight" ? state.hlColor : opt().color, rects: [[x0, y0, x0, y0]] };
+  t.annots.push(a);
+  const move = (ev) => {
+    const [x, y] = pdfPoint(pv, ev);
+    const n = norm(x0, y0, x, y);
+    a.rects = [[n.x1, n.y1, n.x2, n.y2]];
+    renderOverlay(t, i);
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    t.annots.pop();
+    const [x1, y1, x2, y2] = a.rects[0];
+    if (Math.abs(x2 - x1) < 3 || Math.abs(y2 - y1) < 3) return renderOverlay(t, i);
+    pushUndo(t);
+    t.annots.push(a);
+    refreshAll(t);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+}, true);
+
 $("#sel-pop").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   if (b.dataset.mark === "copy") {

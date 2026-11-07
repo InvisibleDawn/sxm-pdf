@@ -1,5 +1,12 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 — Surligner sur les documents scannés
+
+- Sur une page scannée (image, sans texte), Sélectionner et Surligner ne faisaient rien, sans
+  explication. Désormais : Surligner / Souligner / Barrer tracent un rectangle sur la zone ;
+  Sélectionner affiche un message expliquant que la page est une image. PDF texte : inchangé.
+- Vérifié dans l'application compilée (WebKitGTK) : PDF texte et PDF scanné.
+
 ## 2026-11-06 (23 h) — Interface plus vivante, moins de texte
 
 - **Ruban** : outils en icônes colorées (une couleur par famille : fichiers bleu, surlignage jaune,
