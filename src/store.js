@@ -8,10 +8,10 @@
 //  - Un import est validé entièrement puis préparé sur une copie : en cas d'erreur, rien ne change.
 import { invoke } from "@tauri-apps/api/core";
 
-const KEYS = ["sxm.signatures", "sxm.stamps", "sxm.initials", "sxm.batchProfiles", "sxm.watermarkTemplates", "sxm.theme", "sxm.welcomed"];
-const RAW = new Set(["sxm.initials", "sxm.theme", "sxm.welcomed"]); // valeurs texte dans l'ancien stockage
+const KEYS = ["sxm.signatures", "sxm.stamps", "sxm.initials", "sxm.initialsStyle", "sxm.batchProfiles", "sxm.watermarkTemplates", "sxm.theme", "sxm.welcomed"];
+const RAW = new Set(["sxm.initials", "sxm.initialsStyle", "sxm.theme", "sxm.welcomed"]); // valeurs texte dans l'ancien stockage
 const LISTS = ["sxm.signatures", "sxm.stamps", "sxm.batchProfiles", "sxm.watermarkTemplates"];
-const TEXTS = ["sxm.initials"];
+const TEXTS = ["sxm.initials", "sxm.initialsStyle"]; // réglages texte inclus dans l'export et la restauration
 export const BACKUP_FORMAT = 1;
 
 let data = {};
@@ -41,9 +41,19 @@ async function writeNow(obj) {
 
 function mirror(k) {
   try {
+    // Les listes (signatures, tampons, profils, modèles) ne sont plus recopiées dans le stockage
+    // interne de la fenêtre : le fichier de données et son .bak suffisent. L'ancienne copie,
+    // lue une seule fois pour la migration des anciennes versions, est effacée dès que le fichier
+    // de données a été écrit avec succès.
+    if (LISTS.includes(k)) return; // effacée après une écriture réussie (dropLegacyCopies)
     if (k in data) localStorage.setItem(k, RAW.has(k) ? String(data[k]) : JSON.stringify(data[k]));
     else localStorage.removeItem(k);
-  } catch { /* copie de secours facultative */ }
+  } catch { /* copie facultative */ }
+}
+
+/** Ancienne copie des listes dans le stockage de la fenêtre : inutile une fois le fichier écrit. */
+function dropLegacyCopies() {
+  for (const k of LISTS) { try { localStorage.removeItem(k); } catch { /* facultatif */ } }
 }
 
 /** À appeler une fois au démarrage, avant toute lecture. */
@@ -72,6 +82,7 @@ export async function initStore() {
     } catch { /* valeur illisible : ignorée */ }
   }
   if (migrated) await flush();
+  else if (!loadError && Object.keys(data).length) dropLegacyCopies(); // fichier valide : la copie est inutile
   if (loadError) {
     emit({
       ok: false, startup: true,
@@ -100,6 +111,7 @@ export function flush() {
     try {
       await writeNow(data);
       unsaved = false;
+      dropLegacyCopies();
       clearTimeout(retryTimer); retryTimer = null;
       emit({ ok: true });
       return true;
@@ -262,6 +274,7 @@ export function validateBackup(text) {
       });
     }
     if (src["sxm.initials"] !== undefined) clean["sxm.initials"] = str(src["sxm.initials"], "initiales", { max: 20 });
+    if (src["sxm.initialsStyle"] !== undefined) clean["sxm.initialsStyle"] = oneOf(src["sxm.initialsStyle"], ["neutre", "manuscrit"], "style des initiales");
   } catch (e) {
     if (e instanceof Invalid) throw new Error(`Sauvegarde endommagée : ${e.message} invalide. Aucune donnée n'a été modifiée.`);
     throw e;

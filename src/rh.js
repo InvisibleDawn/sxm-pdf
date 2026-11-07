@@ -192,7 +192,7 @@ export function searchRedactDialog() {
   return modal((m, close) => {
     const term = textIn("Texte à masquer (nom, numéro…) — plusieurs possibles, séparés par ;");
     const checks = Object.entries(PRESETS).map(([k, p]) => [k, el("input", { type: "checkbox" }), p.label]);
-    const mode = sel([["black", "Bloc noir (recommandé)"], ["blur", "Flou"]], "black");
+    const mode = sel([["black", "Bloc noir (recommandé)"], ["blur", "Flou (moins sûr pour les numéros)"]], "black");
     const go = () => {
       const regexes = [], labels = [];
       for (const t of term.value.split(";").map((x) => x.trim()).filter(Boolean)) {

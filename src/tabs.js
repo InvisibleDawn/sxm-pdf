@@ -101,10 +101,23 @@ export async function loadBytes(t, bytes) {
   if (t.id === state.active) { renderThumbs(); updatePageInfo(); }
 }
 
+/** Vrai si le fichier contient un dictionnaire de chiffrement (/Encrypt). Vérifié ensuite par qpdf. */
+function looksEncrypted(bytes) {
+  const pat = [47, 69, 110, 99, 114, 121, 112, 116]; // "/Encrypt"
+  outer: for (let i = bytes.indexOf(47); i !== -1 && i < bytes.length - 8; i = bytes.indexOf(47, i + 1)) {
+    for (let k = 1; k < 8; k++) if (bytes[i + k] !== pat[k]) continue outer;
+    return true;
+  }
+  return false;
+}
+
 export async function openPdfBytes(bytes, name, path = null) {
   const t = createTab(name, path);
   try {
     await loadBytes(t, bytes);
+    // PDF chiffré sans mot de passe d'ouverture (restrictions seules) : il s'affiche, mais l'enregistrer
+    // tel quel produirait un fichier illisible. On le déchiffre et on garde ses restrictions.
+    if (path && looksEncrypted(bytes)) await unlockRestricted(t, path);
   } catch (e) {
     if (e?.name === "PasswordException" && path && (await unlockInto(t, path))) return t;
     t.container.remove(); state.tabs = state.tabs.filter((x) => x !== t); activate(state.tabs.at(-1)?.id ?? null);
@@ -122,17 +135,68 @@ export async function unlockInto(t, path) {
     if (pw == null) return false;
     try {
       const tmp = await busy("Déverrouillage…", () => io.pdfDecrypt(path, pw));
-      const bytes = await io.readFile(tmp);
-      io.removeTemp(tmp);
+      let bytes;
+      try { bytes = await io.readFile(tmp); } finally { io.removeTemp(tmp); } // copie déchiffrée toujours effacée
       await loadBytes(t, bytes);
-      // On garde le mot de passe : le fichier reste protégé à l'enregistrement
-      t.protect = { user: pw, owner: pw, print: true, copy: true, modify: true };
+      // Le fichier reste protégé à l'enregistrement, avec ses droits d'origine
+      t.protect = await keepRights(path, pw);
       renderTabs();
       return true;
     } catch (e) {
       if (String(e).includes("MOT_DE_PASSE_INVALIDE")) text = "Mot de passe incorrect. Réessayez :";
       else { toast(String(e), true); return false; }
     }
+  }
+}
+
+/** PDF chiffré sans mot de passe d'ouverture : déchiffré pour l'édition, droits conservés à l'enregistrement. */
+async function unlockRestricted(t, path) {
+  let info;
+  try { info = await io.pdfEncryptionInfo(path, ""); } catch { info = null; }
+  if (info && !info.encrypted) return;
+  if (!(await ensureTool("qpdf"))) {
+    t.encryptedNoTool = true;
+    toast("Ce PDF est chiffré (restrictions d'usage). Vous pouvez le lire, mais pas l'enregistrer tant que qpdf n'est pas installé.", true);
+    return;
+  }
+  const tmp = await io.pdfDecrypt(path, "");
+  let bytes;
+  try { bytes = await io.readFile(tmp); } finally { io.removeTemp(tmp); }
+  await loadBytes(t, bytes);
+  t.protect = await keepRights(path, "");
+  renderTabs();
+}
+
+/**
+ * Droits à réappliquer à l'enregistrement d'un PDF protégé (impression, copie, modification).
+ * Le mot de passe propriétaire d'origine est demandé pour conserver les restrictions ; à défaut,
+ * un mot de passe propriétaire aléatoire les maintient.
+ */
+async function keepRights(path, pw) {
+  const all = { user: pw, owner: pw, print: true, copy: true, modify: true };
+  let info;
+  try { info = await io.pdfEncryptionInfo(path, pw); } catch { return all; }
+  const rights = { print: !!info.print, copy: !!info.copy, modify: !!info.modify };
+  if (info.ownerSupplied) {
+    // Ouvert avec le mot de passe propriétaire : le mot de passe d'ouverture n'est pas récupérable (AES-256)
+    const user = await askText("🔒 Mot de passe d'ouverture", "", { password: true,
+      text: "Vous avez ouvert ce PDF avec son mot de passe propriétaire. Quel mot de passe faudra-t-il pour l'ouvrir après enregistrement ? Laissez vide pour garder le même." });
+    return { user: user || pw, owner: pw, ...rights };
+  }
+  if (rights.print && rights.copy && rights.modify) return { ...all, ...rights };
+  let text = "Ce PDF limite l'impression, la copie ou la modification. Pour conserver ces limites à l'enregistrement avec leur mot de passe d'origine, indiquez le mot de passe propriétaire. Laissez vide : les limites seront conservées avec un nouveau mot de passe propriétaire aléatoire.";
+  for (;;) {
+    const owner = await askText("🔒 Mot de passe propriétaire", "", { password: true, text });
+    if (!owner) {
+      const rnd = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18))));
+      toast("Les limites d'usage du PDF seront conservées à l'enregistrement.");
+      return { user: pw, owner: rnd, ...rights };
+    }
+    try {
+      const o = await io.pdfEncryptionInfo(path, owner);
+      if (o.ownerSupplied) return { user: pw, owner, ...rights };
+    } catch { /* mot de passe faux */ }
+    text = "Ce n'est pas le mot de passe propriétaire de ce PDF. Réessayez, ou laissez vide :";
   }
 }
 
