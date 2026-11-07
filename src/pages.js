@@ -120,6 +120,7 @@ export async function extractPages() {
 
 // ---- Miniatures
 export let thumbJob = 0;
+let thumbObserver = null;
 export async function renderThumbs() {
   const box = $("#thumbs");
   box.replaceChildren();
@@ -154,19 +155,33 @@ export async function renderThumbs() {
   box.append(end);
   highlightThumb();
 
-  for (let i = 0; i < doc.numPages; i++) {
-    if (job !== thumbJob || t.pdfDoc !== doc) return;
+  // Miniatures dessinées seulement quand elles deviennent visibles (gros documents : mémoire et
+  // temps d'ouverture maîtrisés). Taille provisoire d'après la page 1 pour garder la mise en page.
+  thumbObserver?.disconnect();
+  try {
+    const vp1 = (await doc.getPage(1)).getViewport({ scale: 1 });
+    const h = Math.round((260 * vp1.height) / vp1.width);
+    for (const c of box.querySelectorAll(".thumb canvas")) { c.width = 260; c.height = h; }
+  } catch { return; }
+  let queue = Promise.resolve();
+  const draw = (i, c) => (queue = queue.then(async () => {
+    if (job !== thumbJob || t.pdfDoc !== doc || !c.isConnected) return;
     try {
       const page = await doc.getPage(i + 1);
       const vp = page.getViewport({ scale: 1 });
-      const sc = 260 / vp.width;
-      const v2 = page.getViewport({ scale: sc });
-      const c = box.children[i]?.querySelector("canvas");
-      if (!c) return;
+      const v2 = page.getViewport({ scale: 260 / vp.width });
       c.width = v2.width; c.height = v2.height;
       await page.render({ canvasContext: c.getContext("2d"), viewport: v2 }).promise;
     } catch { /* document remplacé pendant le rendu */ }
-  }
+  }));
+  thumbObserver = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue;
+      thumbObserver.unobserve(e.target);
+      draw(+e.target.dataset.i, e.target.querySelector("canvas"));
+    }
+  }, { root: null, rootMargin: "600px 0px" });
+  for (const item of box.querySelectorAll(".thumb[data-i]")) thumbObserver.observe(item);
 }
 export function highlightThumb() {
   const t = tab(); if (!t) return;

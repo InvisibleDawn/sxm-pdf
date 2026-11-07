@@ -98,6 +98,9 @@ export async function printDoc() {
     // jusqu'à la prochaine impression, sinon la page imprimée sortirait blanche.
     try { await invoke("print_window"); }
     catch (e) { toast("Impression impossible : " + (e?.message || e), true); }
+    // La fenêtre d'impression bloque l'application tant qu'elle est ouverte : au premier clic qui suit,
+    // l'impression est terminée et les images du document peuvent être libérées.
+    document.addEventListener("pointerdown", () => root.replaceChildren(), { once: true, capture: true });
     return;
   }
   window.print();
