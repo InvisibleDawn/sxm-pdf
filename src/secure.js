@@ -69,8 +69,7 @@ export async function doBatch() {
         const sep = f.includes("\\") ? "\\" : "/";
         let out = cfg.outDir ? `${cfg.outDir}${sep}${io.baseName(f)}` : `${io.dirName(f)}${sep}${io.stem(f)}${cfg.suffix}.pdf`;
         if (out === f) out = `${io.dirName(f)}${sep}${io.stem(f)}${cfg.suffix}.pdf`; // jamais d'écrasement de l'original
-        await io.writeFile(out, await pdf.save());
-        if (cfg.password) await io.pdfEncrypt(out, out, { user: cfg.password, owner: cfg.password, print: true, copy: true, modify: true });
+        await io.writePdf(out, await pdf.save(), cfg.password ? { user: cfg.password, owner: cfg.password, print: true, copy: true, modify: true } : null);
         ok++;
       } catch (e) {
         errors.push(`${io.baseName(f)} : ${e?.message || e}`);

@@ -19,6 +19,8 @@ fn read_bytes(path: String) -> Result<tauri::ipc::Response, String> {
 }
 
 /// Écrit un fichier ; le corps de la requête est le contenu binaire.
+/// Écriture sûre : fichier temporaire dans le même dossier, forcé sur le disque, puis remplacement
+/// atomique. Une coupure ou un disque plein pendant l'écriture laisse l'ancien fichier intact.
 #[tauri::command]
 fn write_bytes(request: tauri::ipc::Request) -> Result<(), String> {
     let path = request
@@ -30,7 +32,17 @@ fn write_bytes(request: tauri::ipc::Request) -> Result<(), String> {
     let tauri::ipc::InvokeBody::Raw(data) = request.body() else {
         return Err("Contenu invalide".into());
     };
-    std::fs::write(&path, data).map_err(|e| format!("Écriture impossible de {path} : {e}"))
+    write_file_safely(Path::new(&path), data).map_err(|e| format!("Écriture impossible de {path} : {e}"))
+}
+
+/// Fichier temporaire voisin (même dossier, donc même disque : le remplacement est atomique).
+fn sibling_tmp(path: &Path) -> PathBuf {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    path.with_file_name(format!(".{name}.sxm-tmp"))
+}
+
+fn write_file_safely(path: &Path, data: &[u8]) -> Result<(), String> {
+    atomic_write(path, &sibling_tmp(path), data, &replace_file)
 }
 
 fn urlencode_decode(s: &str) -> String {
@@ -272,14 +284,23 @@ fn find_qpdf(app: &tauri::AppHandle) -> Option<PathBuf> {
 
 fn run_qpdf(app: &tauri::AppHandle, args: Vec<String>) -> Result<(), String> {
     let qpdf = find_qpdf(app).ok_or("qpdf est introuvable. Sous Fedora : sudo dnf install qpdf")?;
+    run_qpdf_bin(&qpdf, args)
+}
+
+fn run_qpdf_bin(qpdf: &Path, args: Vec<String>) -> Result<(), String> {
+    // Les arguments (dont les mots de passe) passent par un fichier privé « @fichier » et non par
+    // la ligne de commande, visible des autres programmes de la session (ps, Gestionnaire des tâches).
+    let argfile = write_private_argfile(&args)?;
     let mut cmd = Command::new(qpdf);
-    cmd.args(&args);
+    cmd.arg(format!("@{}", argfile.to_string_lossy()));
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // pas de fenêtre console
     }
-    let out = cmd.output().map_err(|e| format!("Échec du lancement de qpdf : {e}"))?;
+    let res = cmd.output();
+    let _ = std::fs::remove_file(&argfile);
+    let out = res.map_err(|e| format!("Échec du lancement de qpdf : {e}"))?;
     // Code 3 = succès avec avertissements
     match out.status.code() {
         Some(0) | Some(3) => Ok(()),
@@ -294,6 +315,44 @@ fn run_qpdf(app: &tauri::AppHandle, args: Vec<String>) -> Result<(), String> {
     }
 }
 
+/// Fichier d'arguments lisible par le seul utilisateur, un argument par ligne.
+fn write_private_argfile(args: &[String]) -> Result<PathBuf, String> {
+    use std::io::Write;
+    if args.iter().any(|a| a.contains('\n') || a.contains('\r')) {
+        return Err("Un mot de passe ne peut pas contenir de retour à la ligne.".into());
+    }
+    let dir = app_temp_dir();
+    let path = dir.join(format!("qpdf-{}-{}.args", std::process::id(), unique_suffix()));
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(&path).map_err(|e| format!("Fichier temporaire impossible : {e}"))?;
+    f.write_all(args.join("\n").as_bytes()).and_then(|_| f.write_all(b"\n")).map_err(|e| e.to_string())?;
+    Ok(path)
+}
+
+/// Dossier temporaire propre à SXM PDF (privé sous Linux/macOS).
+fn app_temp_dir() -> PathBuf {
+    let dir = std::env::temp_dir().join("sxm-pdf");
+    let _ = std::fs::create_dir_all(&dir);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    }
+    dir
+}
+
+fn unique_suffix() -> String {
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+    format!("{t}-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+}
+
 /// Protège un PDF par mot de passe (AES-256). input peut être égal à output.
 #[tauri::command]
 async fn pdf_encrypt(
@@ -306,7 +365,7 @@ async fn pdf_encrypt(
     allow_copy: bool,
     allow_modify: bool,
 ) -> Result<(), String> {
-    let mut args = vec![
+    let args = vec![
         "--encrypt".to_string(),
         user_pw,
         owner_pw,
@@ -317,14 +376,28 @@ async fn pdf_encrypt(
         "--".into(),
         input.clone(),
     ];
-    if input == output {
-        args.push("--replace-input".into());
-    } else {
-        args.push(output);
-    }
-    tauri::async_runtime::spawn_blocking(move || run_qpdf(&app, args))
+    let qpdf = find_qpdf(&app).ok_or("qpdf est introuvable. Sous Fedora : sudo dnf install qpdf")?;
+    tauri::async_runtime::spawn_blocking(move || encrypt_with(&qpdf, args, &input, &output))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Chiffre `input` vers `output`. Le fichier final n'est remplacé qu'une fois le chiffrement réussi :
+/// en cas d'échec, l'ancien fichier reste intact et aucune version en clair n'est laissée à sa place.
+fn encrypt_with(qpdf: &Path, mut args: Vec<String>, input: &str, output: &str) -> Result<(), String> {
+    if input == output {
+        // qpdf écrit lui-même dans un temporaire puis remplace le fichier
+        args.push("--replace-input".into());
+        return run_qpdf_bin(qpdf, args);
+    }
+    let dest = PathBuf::from(output);
+    let tmp = sibling_tmp(&dest);
+    args.push(tmp.to_string_lossy().to_string());
+    let res = run_qpdf_bin(qpdf, args).and_then(|_| replace_file(&tmp, &dest).map_err(|e| format!("Remplacement impossible : {e}")));
+    if res.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    res
 }
 
 /// Retire la protection d'un PDF (mot de passe requis). Renvoie le chemin du PDF déchiffré.
@@ -347,13 +420,18 @@ async fn pdf_decrypt(app: tauri::AppHandle, input: String, password: String) -> 
     Ok(out_s)
 }
 
-/// Supprime un fichier temporaire créé par SXM PDF.
+/// Supprime un fichier temporaire créé par SXM PDF (uniquement dans le dossier temporaire).
 #[tauri::command]
 fn remove_temp(path: String) {
-    let tmp = std::env::temp_dir();
-    if Path::new(&path).starts_with(&tmp) {
+    if is_in_temp(Path::new(&path)) {
         let _ = std::fs::remove_file(path);
     }
+}
+
+/// Vrai si le chemin, une fois résolu (liens et « .. » compris), est dans le dossier temporaire.
+fn is_in_temp(p: &Path) -> bool {
+    let (Ok(file), Ok(tmp)) = (p.canonicalize(), std::env::temp_dir().canonicalize()) else { return false };
+    file.starts_with(tmp) && file.is_file()
 }
 
 /// Ouvre un nouveau message dans la messagerie par défaut avec le PDF en pièce jointe.
@@ -991,6 +1069,112 @@ mod tests {
         assert_eq!(read(&f), "{\"_format\":1,\"n\":59}");
     }
 
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 1)
+
+    /// PDF minimal valide d'une page contenant le texte SECRET-RH (flux non compressé).
+    fn mini_pdf() -> Vec<u8> {
+        let content = "BT /F1 12 Tf 72 720 Td (SECRET-RH) Tj ET";
+        let objs = [
+            "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".to_string(),
+            format!("<< /Length {} >>\nstream\n{}\nendstream", content.len(), content),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+        ];
+        let mut out = b"%PDF-1.4\n".to_vec();
+        let mut offs = vec![];
+        for (i, o) in objs.iter().enumerate() {
+            offs.push(out.len());
+            out.extend(format!("{} 0 obj\n{}\nendobj\n", i + 1, o).as_bytes());
+        }
+        let xref = out.len();
+        out.extend(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+        for o in offs { out.extend(format!("{o:010} 00000 n \n").as_bytes()); }
+        out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+        out
+    }
+
+    fn system_qpdf() -> Option<PathBuf> {
+        ["/usr/bin/qpdf", "/usr/local/bin/qpdf", "/opt/homebrew/bin/qpdf"].iter().map(PathBuf::from).find(|p| p.exists())
+            .or_else(|| Command::new("qpdf").arg("--version").output().ok().filter(|o| o.status.success()).map(|_| PathBuf::from("qpdf")))
+    }
+
+    #[test]
+    fn ecriture_pdf_sure_remplace_sans_laisser_de_temporaire() {
+        let d = dir("pdfw");
+        let f = d.join("contrat signé.pdf");
+        std::fs::write(&f, b"ancienne version").unwrap();
+        write_file_safely(&f, b"nouvelle version").unwrap();
+        assert_eq!(std::fs::read(&f).unwrap(), b"nouvelle version");
+        assert!(!sibling_tmp(&f).exists(), "aucun fichier temporaire ne doit rester");
+        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn ecriture_pdf_echec_garde_l_original() {
+        let d = dir("pdfwko");
+        let f = d.join("original.pdf");
+        std::fs::write(&f, b"ORIGINAL").unwrap();
+        std::fs::create_dir_all(sibling_tmp(&f).join("bloque")).unwrap(); // le temporaire est un dossier : écriture impossible
+        assert!(write_file_safely(&f, b"NOUVEAU").is_err());
+        assert_eq!(std::fs::read(&f).unwrap(), b"ORIGINAL", "l'original doit rester intact");
+    }
+
+    #[test]
+    fn suppression_temporaire_refuse_hors_du_dossier_temporaire() {
+        let outside = dir("hors").join("garder.txt");
+        std::fs::write(&outside, b"x").unwrap();
+        // chemin qui « commence » par le dossier temporaire mais remonte ailleurs avec ..
+        let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("/"));
+        let sneaky = std::env::temp_dir().join("..").join(home.strip_prefix("/").unwrap_or(&home)).join("fichier-inexistant");
+        assert!(!is_in_temp(&sneaky));
+        let inside = app_temp_dir().join(format!("t-{}", unique_suffix()));
+        std::fs::write(&inside, b"x").unwrap();
+        assert!(is_in_temp(&inside));
+        remove_temp(inside.to_string_lossy().to_string());
+        assert!(!inside.exists());
+        assert!(is_in_temp(&outside), "dir() de test est lui-même dans le dossier temporaire");
+    }
+
+    #[test]
+    fn fichier_d_arguments_prive_et_sans_retour_ligne() {
+        let f = write_private_argfile(&["--password=Mot de passe é".into(), "--decrypt".into()]).unwrap();
+        assert_eq!(read(&f), "--password=Mot de passe é\n--decrypt\n");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        let _ = std::fs::remove_file(&f);
+        assert!(write_private_argfile(&["a\nb".into()]).is_err());
+    }
+
+    #[test]
+    fn chiffrement_vers_destination_puis_echec_sans_toucher_l_original() {
+        let Some(qpdf) = system_qpdf() else { eprintln!("qpdf absent : test ignoré"); return };
+        let d = dir("enc");
+        let clair = d.join("clair.pdf");
+        std::fs::write(&clair, mini_pdf()).unwrap();
+        let dest = d.join("protégé.pdf");
+        std::fs::write(&dest, b"ANCIEN PDF PROTEGE").unwrap();
+        let args = |input: &Path| vec!["--encrypt".into(), "Utilisateur 1".into(), "Proprio 2".into(), "256".into(), "--".into(), input.to_string_lossy().to_string()];
+        // 1. succès : la destination est chiffrée, sans texte en clair, et demande le mot de passe
+        encrypt_with(&qpdf, args(&clair), &clair.to_string_lossy(), &dest.to_string_lossy()).unwrap();
+        let bytes = std::fs::read(&dest).unwrap();
+        assert!(!bytes.windows(9).any(|w| w == b"SECRET-RH"), "aucun texte en clair");
+        let st = Command::new(&qpdf).arg("--requires-password").arg(&dest).status().unwrap();
+        assert_eq!(st.code(), Some(0), "le fichier doit demander un mot de passe");
+        assert!(run_qpdf_bin(&qpdf, vec!["--password=Utilisateur 1".into(), "--check".into(), dest.to_string_lossy().to_string()]).is_ok(), "mot de passe avec espace accepté");
+        assert_eq!(run_qpdf_bin(&qpdf, vec!["--password=faux".into(), "--check".into(), dest.to_string_lossy().to_string()]), Err("MOT_DE_PASSE_INVALIDE".into()));
+        // 2. échec (source illisible) : la destination n'est pas modifiée, pas de temporaire
+        let avant = std::fs::read(&dest).unwrap();
+        let abime = d.join("abime.pdf");
+        std::fs::write(&abime, b"pas un pdf").unwrap();
+        assert!(encrypt_with(&qpdf, args(&abime), &abime.to_string_lossy(), &dest.to_string_lossy()).is_err());
+        assert_eq!(std::fs::read(&dest).unwrap(), avant, "destination intacte après un échec");
+        assert!(!sibling_tmp(&dest).exists());
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1063,9 +1247,9 @@ fn check_tools(app: tauri::AppHandle) -> serde_json::Value {
 /// Dossier temporaire pour les fichiers à envoyer / imprimer.
 #[tauri::command]
 fn temp_path(name: String) -> String {
-    let dir = std::env::temp_dir().join("sxm-pdf-envoi");
+    let dir = app_temp_dir().join("envoi");
     let _ = std::fs::create_dir_all(&dir);
-    dir.join(name.replace(['/', '\\'], "_")).to_string_lossy().to_string()
+    dir.join(name.replace(['/', '\\', ':'], "_")).to_string_lossy().to_string()
 }
 
 /// Nom du fichier .desktop installé par le paquet (ex. « SXM PDF.desktop »).

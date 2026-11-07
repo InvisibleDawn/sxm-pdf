@@ -15,6 +15,22 @@ export async function writeFile(path, bytes) {
   await invoke("write_bytes", data, { headers: { "x-path": encodeURIComponent(path) } });
 }
 
+/**
+ * Enregistre un PDF, protégé par mot de passe si `protect` est fourni.
+ * Le contenu en clair n'est écrit que dans le dossier temporaire privé, puis chiffré directement
+ * vers la destination : si le chiffrement échoue, le fichier de destination n'est pas touché.
+ */
+export async function writePdf(path, bytes, protect = null) {
+  if (!protect) return writeFile(path, bytes);
+  const tmp = await invoke("temp_path", { name: `chiffrement-${Date.now()}-${Math.random().toString(36).slice(2)}.pdf` });
+  try {
+    await writeFile(tmp, bytes);
+    await pdfEncrypt(tmp, path, protect);
+  } finally {
+    removeTemp(tmp);
+  }
+}
+
 export const baseName = (p) => p.split(/[\\/]/).pop();
 export const stem = (p) => baseName(p).replace(/\.[^.]+$/, "");
 export const dirName = (p) => p.replace(/[\\/][^\\/]*$/, "");
