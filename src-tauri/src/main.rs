@@ -738,6 +738,28 @@ fn send_mail_impl(path: &str, subject: &str) -> Result<String, String> {
     }
 }
 
+/// Ouvre un lien d'un PDF dans le navigateur ou la messagerie par défaut (http, https, mailto seulement).
+#[tauri::command]
+fn open_external(url: String) -> Result<(), String> {
+    if !is_safe_url(&url) {
+        return Err("Lien non pris en charge.".into());
+    }
+    #[cfg(windows)]
+    let r = Command::new("rundll32").args(["url.dll,FileProtocolHandler", &url]).spawn();
+    #[cfg(target_os = "macos")]
+    let r = Command::new("open").arg(&url).spawn();
+    #[cfg(target_os = "linux")]
+    let r = Command::new("xdg-open").arg(&url).spawn();
+    r.map(|_| ()).map_err(|e| e.to_string())
+}
+
+fn is_safe_url(url: &str) -> bool {
+    let l = url.to_ascii_lowercase();
+    (l.starts_with("https://") || l.starts_with("http://") || l.starts_with("mailto:"))
+        && !url.chars().any(|c| c.is_control() || c == '"' || c == ' ')
+        && url.len() < 4096
+}
+
 /// Affiche le fichier dans le gestionnaire de fichiers.
 fn reveal(path: &str) {
     #[cfg(windows)]
@@ -1534,6 +1556,17 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
         assert!(p.0, "interface marquée prête");
         assert!(p.1.is_empty(), "liste vidée après remise à l'interface");
     }
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 6)
+
+    #[test]
+    fn seuls_les_liens_web_et_mail_sont_ouverts() {
+        assert!(is_safe_url("https://www.service-public.fr/particuliers/vosdroits/F2258"));
+        assert!(is_safe_url("mailto:rh@exemple.fr?subject=Contrat"));
+        for bad in ["file:///etc/passwd", "javascript:alert(1)", "smb://serveur/partage", "https://a.fr/\" & calc", "C:\\Windows\\system32\\calc.exe", "https://x.fr/a b"] {
+            assert!(!is_safe_url(bad), "{bad} doit être refusé");
+        }
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1796,6 +1829,7 @@ fn main() {
             remove_temp,
             send_mail,
             pin_app,
+            open_external,
             data_load,
             data_save,
             data_path,

@@ -164,8 +164,15 @@ appWindow.onCloseRequested(async (ev) => {
   }
   if (!dirty.length) return;
   ev.preventDefault();
-  const r = await confirmBox("Quitter SXM PDF", `${dirty.length} document(s) contiennent des modifications non enregistrées.`, "Quitter sans enregistrer", "Annuler");
-  if (r === true) { state.tabs.forEach((t) => (t.dirty = false)); appWindow.destroy(); }
+  const r = await confirmBox("Quitter SXM PDF", `${dirty.length} document(s) contiennent des modifications non enregistrées.`,
+    "Tout enregistrer et quitter", "Annuler", "Quitter sans enregistrer");
+  if (r === "third") { state.tabs.forEach((t) => (t.dirty = false)); return appWindow.destroy(); }
+  if (r !== true) return;
+  for (const t of dirty) {
+    activate(t.id);
+    if (!(await saveTab(t))) return; // enregistrement annulé ou en échec : on reste
+  }
+  appWindow.destroy();
 });
 
 // Arguments au lancement : fichiers à ouvrir ou --capture (raccourci GNOME)

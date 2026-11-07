@@ -31,9 +31,15 @@ export function refreshAll(t = tab()) {
   renderAnnotList();
 }
 
+/** Mémoire maximale des copies de PDF gardées pour « Annuler » (opérations sur les pages). */
+const UNDO_BYTES_MAX = 300 * 1024 * 1024;
+const undoBytes = (list) => list.reduce((n, s) => n + (s.bytes?.length || 0), 0);
+
 export function pushUndo(t, structural = false) {
   t.undo.push({ annots: structuredClone(t.annots), bytes: structural ? t.bytes : null });
   if (t.undo.length > 60) t.undo.shift();
+  // Gros PDF : on garde au moins 5 annulations, puis on limite la mémoire totale
+  while (t.undo.length > 5 && undoBytes(t.undo) > UNDO_BYTES_MAX) t.undo.shift();
   t.redo = [];
   markDirty(t);
 }

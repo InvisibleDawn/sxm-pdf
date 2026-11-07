@@ -1,5 +1,6 @@
 // Onglets et chargement des documents.
 import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
+import { invoke } from "@tauri-apps/api/core";
 import * as io from "./io.js";
 import { pdfjsLib } from "./pdfsetup.js";
 import { PDFViewer, EventBus, PDFLinkService } from "pdfjs-dist/web/pdf_viewer.mjs";
@@ -45,6 +46,15 @@ export function createTab(name, path) {
   eventBus.on("annotationlayerrendered", () => {});
   // Modification d'un champ de formulaire
   container.addEventListener("input", (e) => { if (e.target.closest(".annotationLayer")) markDirty(t); });
+  // Liens internet du PDF : ouverts dans le navigateur après confirmation (adresse affichée)
+  container.addEventListener("click", async (e) => {
+    const a = e.target.closest?.(".annotationLayer a[href]");
+    const href = a?.getAttribute("href") || "";
+    if (!/^(https?:|mailto:)/i.test(href)) return; // liens internes (vers une page) : gérés par pdf.js
+    e.preventDefault(); e.stopPropagation();
+    if (await confirmBox("Ouvrir le lien ?", `Ce PDF contient un lien vers :\n${href}`, "Ouvrir", "Annuler"))
+      invoke("open_external", { url: href }).catch((err) => toast(String(err), true));
+  }, true);
 
   state.tabs.push(t);
   activate(t.id);

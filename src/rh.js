@@ -211,6 +211,7 @@ export function searchRedactDialog() {
       ...checks.map(([, c, l]) => el("label", { class: "row" }, c, l)),
       el("div", { class: "row" }, "Masquage :", mode),
       el("p", { style: "font-size:12px" }, "ℹ️ Fonctionne sur les PDF contenant du texte. Pour un document scanné, utilisez l'outil ▦ Masquer à la main."),
+      el("p", { style: "font-size:12px" }, "ℹ️ Les valeurs saisies dans les champs de formulaire et les propriétés du fichier (titre, auteur) ne sont pas analysées : vérifiez-les avant d'envoyer le document."),
       el("div", { class: "row end" }, el("button", { class: "btn", onclick: () => close(null) }, "Annuler"), el("button", { class: "btn accent", onclick: go }, "Rechercher et masquer")));
     setTimeout(() => term.focus(), 30);
   });

@@ -1,5 +1,18 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 6 : performances et ergonomie
+
+- **P1** : historique « Annuler » limité à 300 Mo de copies de PDF (au moins 5 annulations gardées).
+- **P2** : miniatures dessinées seulement quand elles deviennent visibles (vérifié sur un PDF de 500 pages).
+- **P3 (macOS)** : images d'impression libérées au premier clic après la fenêtre d'impression.
+- **U1** : les liens internet d'un PDF s'ouvrent dans le navigateur après confirmation affichant
+  l'adresse (`open_external` : http, https et mailto uniquement ; testé).
+- **U2** : à la fermeture, « Tout enregistrer et quitter » en plus de « Quitter sans enregistrer ».
+- **U3** : le masquage par recherche indique qu'il n'analyse ni les champs de formulaire ni les
+  propriétés du fichier.
+- Tests Rust 34/34 (nouveau : liens refusés hors http/https/mailto). Vérifié dans l'appli compilée :
+  confirmation du lien, PDF de 500 pages (miniatures au défilement).
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 5 : multiplateforme
 
 - **M1 (macOS)** : double-clic sur un PDF / « Ouvrir avec » ouvre le fichier (événement `Opened`) ; les
