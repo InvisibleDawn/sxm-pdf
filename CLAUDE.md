@@ -14,8 +14,12 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 
 ## Organisation du code
 - `src/main.js` point d'entrée ; modules `core, tabs, editor, save, pages, convert, secure, app`
-- outils : `annots.js, sign.js, rh.js, watermark.js, capture.js` ; données : `store.js`
-- natif : `src-tauri/src/main.rs` (19 tests `cargo test --release` dans `src-tauri`)
+- outils : `annots.js, sign.js, rh.js, watermark.js, capture.js, tooltip.js` ; données : `store.js`
+- `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
+  Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
+- natif : `src-tauri/src/main.rs` (34 tests `cargo test --release` dans `src-tauri`) ; tests JS : `npm test` (9)
+- écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
+  mots de passe qpdf par fichier d'arguments privé ; temporaires dans `<tmp>/sxm-pdf/` (nettoyés au démarrage).
 - données utilisateur : `~/.config/com.sxm.pdf/sxm-pdf-donnees.json` (+ `.bak`), file d'écriture unique
   côté JS (`enqueue`), verrou `DATA_LOCK` côté Rust, validation stricte des imports et des `.bak`.
 - Ne pas réécrire les modules qui fonctionnent ; ne supprimer aucune fonction ; tester après chaque changement.
@@ -23,7 +27,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 
 ## Compilation
 - Fedora : `npm install && npx tauri build --bundles rpm`
-- GitHub Actions : workflow « Compiler SXM PDF » (tests 3 OS puis installateurs ; Mac = macos-15-intel,
+- GitHub Actions : workflow « Compiler SXM PDF » (tests 3 OS + Fedora 45 en conteneur, puis installateurs ; Mac = macos-15-intel,
   les Mac arm64 de GitHub sont souvent indisponibles) ; « Publier les installateurs » crée une page Releases.
 - Version de test publiée : release `v1.0.3-test` (dmg, exe, msi, rpm, deb).
 
@@ -34,6 +38,11 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   (`print_window`), capture (masquage côté Rust, `screencapture -i` sur Mac), initiales en écriture neutre,
   nouveau look (icônes colorées, info-bulles `tooltip.js`), surlignage par zone sur les pages scannées.
 - Tester l'interface sans Mac : app compilée en debug sous Xvfb + xdotool (WebKitGTK), voir CHANGELOG.
+
+## Consolidation v1 (07/11 soir)
+- Audit (31 problèmes) + rapport : document « SXM PDF — Audit technique avant v1.0 » (Claude Docs).
+- Branche `consolidation-v1`, 6 lots corrigés et testés ; à fusionner dans `main` après validation de Invisible_Dawn.
+- À confirmer sur Mac : double-clic Finder, Cmd+Q, qpdf embarqué, Envoyer (Mail/Outlook) ; Windows : capture 2e écran.
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
