@@ -243,13 +243,7 @@ async fn tokio_sleep_ms(ms: u64) {
 
 #[cfg(not(target_os = "linux"))]
 fn capture_temp_path() -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "sxm-capture-{}.png",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis())
-            .unwrap_or(0)
-    ))
+    app_temp_dir().join(format!("capture-{}.png", unique_suffix()))
 }
 
 #[cfg(target_os = "macos")]
@@ -394,6 +388,53 @@ fn app_temp_dir() -> PathBuf {
     dir
 }
 
+/// Nettoyage au démarrage : fichiers temporaires de SXM PDF de plus de `max_age` (pièces jointes
+/// envoyées, conversions, captures, copies déchiffrées), et anciens dossiers des versions précédentes.
+/// Le profil LibreOffice est conservé (il accélère les conversions).
+fn cleanup_temp(max_age: std::time::Duration) -> usize {
+    let now = std::time::SystemTime::now();
+    let old = |p: &Path| {
+        std::fs::symlink_metadata(p)
+            .and_then(|m| m.modified())
+            .map(|t| now.duration_since(t).unwrap_or_default() >= max_age)
+            .unwrap_or(false)
+    };
+    let mut removed = 0;
+    fn walk(dir: &Path, old: &dyn Fn(&Path) -> bool, removed: &mut usize, keep: &Path) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p == keep { continue; }
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_dir() {
+                walk(&p, old, removed, keep);
+                let _ = std::fs::remove_dir(&p); // seulement s'il est vide
+            } else if old(&p) && std::fs::remove_file(&p).is_ok() {
+                *removed += 1;
+            }
+        }
+    }
+    let base = app_temp_dir();
+    walk(&base, &old, &mut removed, &base.join("lo-profile"));
+    // Anciennes versions : dossiers et captures directement dans le dossier temporaire du système
+    let tmp = std::env::temp_dir();
+    for name in ["sxm-pdf-envoi", "sxm-pdf-conversions", "sxm-pdf-decrypted", "sxm-pdf-lo-profile"] {
+        let d = tmp.join(name);
+        if d.is_dir() && old(&d) && std::fs::remove_dir_all(&d).is_ok() {
+            removed += 1;
+        }
+    }
+    if let Ok(rd) = std::fs::read_dir(&tmp) {
+        for e in rd.flatten() {
+            let n = e.file_name().to_string_lossy().to_string();
+            if n.starts_with("sxm-capture-") && n.ends_with(".png") && old(&e.path()) && std::fs::remove_file(e.path()).is_ok() {
+                removed += 1;
+            }
+        }
+    }
+    removed
+}
+
 fn unique_suffix() -> String {
     static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
@@ -450,15 +491,7 @@ fn encrypt_with(qpdf: &Path, mut args: Vec<String>, input: &str, output: &str) -
 /// Retire la protection d'un PDF (mot de passe requis). Renvoie le chemin du PDF déchiffré.
 #[tauri::command]
 async fn pdf_decrypt(app: tauri::AppHandle, input: String, password: String) -> Result<String, String> {
-    let dir = std::env::temp_dir().join("sxm-pdf-decrypted");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let out = dir.join(format!(
-        "{}.pdf",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0)
-    ));
+    let out = app_temp_dir().join(format!("dechiffre-{}.pdf", unique_suffix()));
     let out_s = out.to_string_lossy().to_string();
     let args = vec![format!("--password={password}"), "--decrypt".into(), input, out_s.clone()];
     tauri::async_runtime::spawn_blocking(move || run_qpdf(&app, args))
@@ -1360,6 +1393,44 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
         let k = encryption_info_with(&qpdf, &s(&libre), "x").unwrap();
         assert_eq!((k["print"].as_bool(), k["copy"].as_bool(), k["modify"].as_bool()), (Some(true), Some(true), Some(true)));
     }
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 4)
+
+    #[test]
+    fn nettoyage_des_temporaires_anciens_seulement() {
+        let base = app_temp_dir();
+        let ancien = base.join("envoi").join(format!("vieux-{}.pdf", unique_suffix()));
+        let recent = base.join("envoi").join(format!("recent-{}.pdf", unique_suffix()));
+        let profil = base.join("lo-profile").join(format!("reglage-{}", unique_suffix()));
+        for p in [&ancien, &recent, &profil] {
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, b"x").unwrap();
+        }
+        let deux_jours = std::time::SystemTime::now() - std::time::Duration::from_secs(48 * 3600);
+        for p in [&ancien, &profil] {
+            std::fs::File::options().write(true).open(p).unwrap().set_modified(deux_jours).unwrap();
+        }
+        let legacy = std::env::temp_dir().join(format!("sxm-capture-{}.png", unique_suffix()));
+        std::fs::write(&legacy, b"x").unwrap();
+        std::fs::File::options().write(true).open(&legacy).unwrap().set_modified(deux_jours).unwrap();
+        assert!(cleanup_temp(std::time::Duration::from_secs(24 * 3600)) >= 2);
+        assert!(!ancien.exists(), "pièce jointe de plus de 24 h effacée");
+        assert!(!legacy.exists(), "ancienne capture (version précédente) effacée");
+        assert!(recent.exists(), "fichier récent conservé (mail peut-être encore ouvert)");
+        assert!(profil.exists(), "profil LibreOffice conservé");
+        let _ = std::fs::remove_file(&recent);
+    }
+
+    #[test]
+    fn captures_et_dechiffrement_dans_le_dossier_prive() {
+        #[cfg(not(target_os = "linux"))]
+        assert!(capture_temp_path().starts_with(app_temp_dir()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(app_temp_dir()).unwrap().permissions().mode() & 0o777, 0o700);
+        }
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1593,6 +1664,8 @@ fn main() {
         .setup(|_app| {
             #[cfg(target_os = "macos")]
             mac_menu(_app)?;
+            // Fichiers temporaires de plus de 24 h effacés en arrière-plan
+            std::thread::spawn(|| cleanup_temp(std::time::Duration::from_secs(24 * 3600)));
             Ok(())
         })
         .on_menu_event(|app, ev| {

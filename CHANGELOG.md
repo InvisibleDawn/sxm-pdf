@@ -1,5 +1,15 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 4 : fichiers temporaires
+
+- **T1** : tous les temporaires (pièces jointes envoyées, conversions, captures, copies déchiffrées,
+  fichiers d'arguments qpdf) sont dans un seul dossier privé `sxm-pdf/` du dossier temporaire
+  (0700 sous Linux/macOS). Au démarrage, les fichiers de plus de 24 h sont effacés en arrière-plan,
+  ainsi que les anciens dossiers des versions précédentes. Le profil LibreOffice est conservé.
+  La capture brute est effacée dès sa lecture ; le fichier converti dès son ouverture (lot 2).
+- **T2** : la copie déchiffrée est toujours effacée, même en cas d'erreur de lecture (lot 3).
+- Tests Rust 31/31 (nouveaux : nettoyage des seuls fichiers anciens, profil conservé, dossier privé).
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 3 : sécurité (suite) et sauvegarde
 
 - **Nouveau défaut trouvé et corrigé** : un PDF chiffré sans mot de passe d'ouverture (restrictions
