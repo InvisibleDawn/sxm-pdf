@@ -178,16 +178,44 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.8; flex: none; }
 .swatch.on { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---------- Éditeur de capture ---------- */
-.cap { width: 94vw; height: 92vh; padding: 0; gap: 0; }
-.cap-bar { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-.cap-bar button { border: 1px solid transparent; background: none; height: 32px; padding: 0 9px; border-radius: 7px; }
-.cap-bar button:hover { background: var(--hover); }
-.cap-bar button.on { background: var(--on); border-color: var(--accent); }
-.cap-bar .grow { flex: 1; }
-.cap-bar .btn { border: 1px solid var(--border); }
-.cap-bar .btn.accent { border-color: var(--accent); }
-.cap-stage { flex: 1; display: flex; align-items: center; justify-content: center; background: var(--doc-bg); min-height: 0; overflow: hidden; }
-.cap-stage canvas { box-shadow: var(--shadow); cursor: crosshair; }
+.cap { width: 95vw; height: 93vh; padding: 0; gap: 0; overflow: hidden; position: relative; animation: cap-in .18s ease-out; }
+@keyframes cap-in { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+.cap-top { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.cap-title { display: flex; align-items: center; gap: 8px; font-weight: 600; min-width: 110px; }
+.cap-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: #fff;
+  background: linear-gradient(135deg, #f43f5e, #f97316); box-shadow: 0 2px 8px rgba(244,63,94,.35); }
+.cap-pill { flex: 1; display: flex; align-items: center; justify-content: center; gap: 3px; flex-wrap: wrap; }
+.cap-pill > * { flex: none; }
+.cap-ic { display: grid; place-items: center; width: 36px; height: 36px; border: none; border-radius: 10px; background: none; color: var(--text);
+  transition: background .12s, color .12s, transform .12s; }
+.cap-ic:hover { background: var(--hover); }
+.cap-ic:active { transform: scale(.92); }
+.cap-ic.on { background: var(--accent); color: #fff; box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 40%, transparent); }
+.cap-ic.close:hover { background: #fee2e2; color: #dc2626; }
+.cap-sep { width: 1px; height: 22px; background: var(--border); margin: 0 7px; }
+.cap-sw { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--panel); background: var(--c); padding: 0; margin: 0 2px;
+  box-shadow: 0 0 0 1px var(--border); cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.cap-sw:hover { transform: scale(1.15); }
+.cap-sw.on { box-shadow: 0 0 0 2px var(--c); transform: scale(1.12); }
+.cap-sw.custom { display: grid; place-items: center; position: relative; color: #fff;
+  background: conic-gradient(#ef4444, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #ef4444); }
+.cap-sw.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.cap-actions { display: flex; align-items: center; gap: 4px; }
+.cap-act { display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px; border: none; border-radius: 10px; background: none; color: var(--text);
+  transition: background .12s, transform .12s; }
+.cap-act:hover { background: var(--hover); }
+.cap-act:active { transform: scale(.95); }
+.cap-act.primary { background: var(--accent); color: #fff; padding: 0 14px; font-weight: 600; box-shadow: 0 3px 12px color-mix(in srgb, var(--accent) 35%, transparent); }
+.cap-act.primary:hover { filter: brightness(1.08); background: var(--accent); }
+.cap-stage { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden;
+  background: radial-gradient(circle, color-mix(in srgb, var(--muted) 22%, transparent) 1px, transparent 1.2px) 0 0 / 18px 18px, var(--doc-bg); }
+.cap-stage canvas { box-shadow: 0 12px 40px rgba(16,24,40,.22); border-radius: 6px; cursor: crosshair; }
+.cap-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; border-radius: 999px; background: rgba(17,24,39,.82); color: #fff; font-size: 13px; pointer-events: none;
+  backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,.25); white-space: nowrap; }
+.cap-hint span { opacity: .75; }
+.cap-hint.pop { animation: cap-pop .25s ease-out; }
+@keyframes cap-pop { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 #toasts { position: fixed; bottom: 16px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
 .toast { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); max-width: 420px; white-space: pre-wrap; }
@@ -204,3 +232,4 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.8; flex: none; }
   #print-root img { display: block; width: 100%; height: auto; page-break-after: always; break-after: page; }
   #print-root img:last-child { page-break-after: auto; break-after: auto; }
 }
+:root[data-theme="dark"] .cap-hint { background: rgba(75,85,99,.92); }

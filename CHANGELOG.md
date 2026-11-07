@@ -13,6 +13,10 @@
   (xcap n'est plus compilé pour macOS).
 - **Initiales** : choix « Écriture : Neutre (Arial) / Manuscrite » dans « Parapher toutes les pages » ;
   Neutre par défaut, choix mémorisé et repris par le traitement par lot.
+- **Éditeur de capture redessiné** : barre à icônes (info-bulles + raccourcis C, A, R, H, T, F, N),
+  pastilles de couleur + couleur libre, Annuler/Rétablir (Ctrl+Z / Ctrl+Maj+Z), Ctrl+C copier,
+  Ctrl+S enregistrer, Entrée ajouter au PDF, bulle flottante qui explique l'outil choisi,
+  fond pointillé et petites animations. Fonctions inchangées.
 - Tests Rust 19/19 (Linux).
 
 ## 2026-11-06 (17 h 40) — Installateurs complets

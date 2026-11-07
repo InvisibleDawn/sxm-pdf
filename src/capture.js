@@ -1,5 +1,20 @@
 // Éditeur de capture : recadrer, flèches, cadres, texte, flou, numéros d'étapes, surligneur.
 import { modal, el, askText, toast } from "./ui.js";
+import { createElement, Crop, MoveUpRight, Square, Highlighter, Type, Grid3x3, Hash, Undo2, Redo2, Copy, Download, Pin, FilePlus2, X, Scissors, Plus } from "lucide";
+
+const icon = (node, size = 18) => createElement(node, { width: size, height: size, "stroke-width": 2 });
+
+// Outils : [id, icône, nom, raccourci, astuce]
+const TOOLS = [
+  ["crop", Crop, "Recadrer", "C", "Tracez la zone à garder"],
+  ["arrow", MoveUpRight, "Flèche", "A", "Glissez pour tracer une flèche"],
+  ["rect", Square, "Cadre", "R", "Glissez pour encadrer"],
+  ["hl", Highlighter, "Surligner", "H", "Glissez pour surligner"],
+  ["text", Type, "Texte", "T", "Cliquez où placer le texte"],
+  ["blur", Grid3x3, "Flouter", "F", "Glissez sur ce qu'il faut cacher"],
+  ["num", Hash, "Étapes numérotées", "N", "Cliquez pour poser 1, 2, 3…"],
+];
+const SWATCHES = ["#e11d48", "#f97316", "#facc15", "#16a34a", "#2563eb", "#7c3aed", "#111827"];
 
 /**
  * Ouvre l'éditeur sur une image (Uint8Array PNG).
@@ -21,7 +36,7 @@ export async function captureEditor(bytes, hasDoc) {
 
     const fit = () => {
       const r = stage.getBoundingClientRect();
-      scale = Math.min((r.width - 30) / base.width, (r.height - 30) / base.height, 1);
+      scale = Math.min((r.width - 30) / base.width, (r.height - 90) / base.height, 1);
       canvas.width = Math.round(base.width * scale);
       canvas.height = Math.round(base.height * scale);
       redraw();
@@ -156,27 +171,93 @@ export async function captureEditor(bytes, hasDoc) {
       close({ action, ...res });
     };
 
-    const tools = [
-      ["crop", "⛶ Recadrer"], ["arrow", "➚ Flèche"], ["rect", "▭ Cadre"], ["hl", "🖍️ Surligner"],
-      ["text", "T Texte"], ["blur", "▦ Flouter"], ["num", "① Numéro"],
-    ].map(([t, label]) => {
-      const b = el("button", { class: t === tool ? "on" : "", onclick: () => { tool = t; tools.forEach((x) => x.classList.remove("on")); b.classList.add("on"); } }, label);
-      return b;
-    });
-    const colorIn = el("input", { type: "color", value: color, title: "Couleur", oninput: (e) => (color = e.target.value) });
+    // ---- Barre d'outils (icônes, pastilles de couleur, raccourcis clavier)
+    const redoStack = [];
+    const hint = el("div", { class: "cap-hint" });
+    const toolBtns = new Map();
+    const setTool = (t) => {
+      tool = t;
+      for (const [id, b] of toolBtns) b.classList.toggle("on", id === t);
+      const d = TOOLS.find((x) => x[0] === t);
+      hint.replaceChildren(icon(d[1], 15), el("b", {}, d[2]), el("span", {}, " · " + d[4]));
+      hint.classList.remove("pop"); void hint.offsetWidth; hint.classList.add("pop");
+    };
+    for (const [id, ic, name, key] of TOOLS) {
+      const b = el("button", { class: "cap-ic", title: `${name}  (${key})`, onclick: () => setTool(id) });
+      b.append(icon(ic));
+      toolBtns.set(id, b);
+    }
+    const swatchBtns = [];
+    const setColor = (c) => {
+      color = c;
+      swatchBtns.forEach((b) => b.classList.toggle("on", b.dataset.c === c));
+      custom.style.setProperty("--c", c);
+    };
+    for (const c of SWATCHES) {
+      const b = el("button", { class: "cap-sw", title: "Couleur", style: `--c:${c}`, onclick: () => setColor(c) });
+      b.dataset.c = c;
+      swatchBtns.push(b);
+    }
+    const colorIn = el("input", { type: "color", value: color, oninput: (e) => setColor(e.target.value) });
+    const custom = el("label", { class: "cap-sw custom", title: "Autre couleur" }, icon(Plus, 13), colorIn);
+
+    const undo = () => {
+      const o = ops.pop();
+      if (o) { if (o.type === "num") num--; redoStack.push(o); }
+      else if (crop) { redoStack.push({ type: "__crop", crop }); crop = null; }
+      redraw();
+    };
+    const redo = () => {
+      const o = redoStack.pop(); if (!o) return;
+      if (o.type === "__crop") crop = o.crop;
+      else { ops.push(o); if (o.type === "num") num++; }
+      redraw();
+    };
+    // toute nouvelle forme vide la pile « rétablir »
+    canvas.addEventListener("pointerup", () => { redoStack.length = 0; }, true);
+
+    const act = (ic, label, title, fn, cls = "") =>
+      el("button", { class: "cap-act " + cls, title, onclick: fn }, icon(ic, 17), label ? el("span", {}, label) : null);
+
+    const onKey = (e) => {
+      if (document.getElementById("modal-root").lastElementChild !== m.parentElement) return; // une autre fenêtre est ouverte
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
+      if (mod && k === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); }
+      else if (mod && k === "y") { e.preventDefault(); redo(); }
+      else if (mod && k === "c") { e.preventDefault(); finish("copy"); }
+      else if (mod && k === "s") { e.preventDefault(); finish("save"); }
+      else if (e.key === "Enter") { e.preventDefault(); finish("page"); }
+      else if (!mod && !e.altKey) {
+        const d = TOOLS.find((x) => x[3].toLowerCase() === k);
+        if (d) { e.preventDefault(); setTool(d[0]); }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    const obs = new MutationObserver(() => { if (!m.isConnected) { document.removeEventListener("keydown", onKey); obs.disconnect(); } });
+    obs.observe(document.getElementById("modal-root"), { childList: true });
 
     m.append(
-      el("div", { class: "cap-bar" },
-        ...tools, colorIn,
-        el("button", { title: "Annuler", onclick: () => { const o = ops.pop(); if (o?.type === "num") num--; if (!o) crop = null; redraw(); } }, "↶"),
-        el("span", { class: "grow" }),
-        el("button", { class: "btn", onclick: () => finish("copy") }, "📋 Copier"),
-        el("button", { class: "btn", onclick: () => finish("save") }, "💾 Enregistrer PNG"),
-        hasDoc ? el("button", { class: "btn", onclick: () => finish("place") }, "📌 Placer sur la page") : null,
-        el("button", { class: "btn accent", onclick: () => finish("page") }, hasDoc ? "➕ Ajouter comme page" : "📄 Créer un PDF"),
-        el("button", { class: "btn", onclick: () => close(null) }, "✕")),
+      el("div", { class: "cap-top" },
+        el("div", { class: "cap-title" }, el("span", { class: "cap-logo" }, icon(Scissors, 16)), el("span", {}, "Capture")),
+        el("div", { class: "cap-pill" },
+          ...toolBtns.values(),
+          el("span", { class: "cap-sep" }),
+          ...swatchBtns, custom,
+          el("span", { class: "cap-sep" }),
+          el("button", { class: "cap-ic", title: "Annuler  (Ctrl+Z)", onclick: undo }, icon(Undo2)),
+          el("button", { class: "cap-ic", title: "Rétablir  (Ctrl+Maj+Z)", onclick: redo }, icon(Redo2))),
+        el("div", { class: "cap-actions" },
+          act(Copy, "", "Copier dans le presse-papiers  (Ctrl+C)", () => finish("copy")),
+          act(Download, "", "Enregistrer en PNG  (Ctrl+S)", () => finish("save")),
+          hasDoc ? act(Pin, "", "Placer sur la page affichée", () => finish("place")) : null,
+          act(FilePlus2, hasDoc ? "Ajouter au PDF" : "Créer un PDF", hasDoc ? "Ajouter comme nouvelle page  (Entrée)" : "Créer un PDF avec cette capture  (Entrée)", () => finish("page"), "primary"),
+          el("button", { class: "cap-ic close", title: "Fermer  (Échap)", onclick: () => close(null) }, icon(X)))),
       stage,
+      hint,
     );
+    setColor(color);
+    setTool(tool);
     requestAnimationFrame(fit);
     window.addEventListener("resize", fit, { once: true });
   }, { cls: "cap" });
