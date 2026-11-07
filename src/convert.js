@@ -104,7 +104,9 @@ export async function doCapture() {
     if (!String(e).includes("annulée")) toast(String(e), true);
     return;
   }
-  const res = await captureEditor(await io.readFile(path), !!tab());
+  let shot;
+  try { shot = await io.readFile(path); } finally { io.removeTemp(path); } // capture brute effacée (seulement si temporaire)
+  const res = await captureEditor(shot, !!tab());
   if (!res) return;
   if (res.action === "save") {
     const d = new Date();
