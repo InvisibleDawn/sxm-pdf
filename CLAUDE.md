@@ -25,13 +25,15 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Fedora : `npm install && npx tauri build --bundles rpm`
 - GitHub Actions : workflow « Compiler SXM PDF » (tests 3 OS puis installateurs ; Mac = macos-15-intel,
   les Mac arm64 de GitHub sont souvent indisponibles) ; « Publier les installateurs » crée une page Releases.
-- Version de test publiée : release `v1.0.0-test` (dmg, exe, msi, rpm, deb).
+- Version de test publiée : release `v1.0.3-test` (dmg, exe, msi, rpm, deb).
 
 ## État au 2026-11-06
 - Tests de sauvegarde 19/19 sur Windows Server 2025, macOS 15.7 (Intel), Ubuntu 22.04.
 - Windows : LibreOffice + qpdf 12.4.2 embarqués. Mac : LibreOffice 26.8.2 embarqué, qpdf à installer (brew).
-- En cours : Invisible_Dawn teste le .dmg sur un MacBook Pro 2018 (Intel). Corrigés le 06/11 soir : impression Mac
-  (`print_window`), capture (masquage côté Rust, `screencapture -i` sur Mac), initiales en écriture neutre.
+- 07/11 : validé par Invisible_Dawn sur MacBook Pro 2018 (Intel) — release `v1.0.3-test`. Inclut : impression Mac
+  (`print_window`), capture (masquage côté Rust, `screencapture -i` sur Mac), initiales en écriture neutre,
+  nouveau look (icônes colorées, info-bulles `tooltip.js`), surlignage par zone sur les pages scannées.
+- Tester l'interface sans Mac : app compilée en debug sous Xvfb + xdotool (WebKitGTK), voir CHANGELOG.
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
