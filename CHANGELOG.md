@@ -1,5 +1,17 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 2 : intégrité des conversions et des fichiers de sortie
+
+- **I3** : chaque conversion LibreOffice écrit dans son propre dossier (`convert_with`) ; une conversion
+  ratée ne peut plus ouvrir un ancien résultat du même nom. Le fichier converti est effacé dès sa lecture.
+- **T3** : une conversion à la fois (`CONVERT_LOCK`), le profil LibreOffice n'étant pas partageable.
+- **M6** : délai maximal de 120 s, LibreOffice est arrêté avec un message clair. Pas de fenêtre console sous Windows.
+- **I4 / I5** : traitement par lot, export en images et division ne remplacent plus jamais un fichier
+  existant (`unique_path` : « nom (2).pdf »…).
+- PDF → Word sur un PDF protégé : message clair au lieu d'une conversion bloquée.
+- Tests Rust 28/28 (nouveaux : nom unique, conversion ratée sans ancien résultat, arrêt après délai,
+  vraie conversion LibreOffice quand il est installé — vérifiée avec LibreOffice 24.2).
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 1 : masquage, pages supprimées, enregistrement sûr
 
 Suite à l'audit technique (document « SXM PDF — Audit technique avant v1.0 »).

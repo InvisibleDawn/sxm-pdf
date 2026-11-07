@@ -289,7 +289,8 @@ export async function splitPdf() {
       const out = await PDFDocument.create();
       (await out.copyPages(src, g)).forEach((p) => out.addPage(p));
       const label = g.length === 1 ? `page-${g[0] + 1}` : `pages-${g[0] + 1}-${g.at(-1) + 1}`;
-      await io.writeFile(`${dir}${sep}${io.stem(t.name)}-${String(k++).padStart(2, "0")}-${label}.pdf`, await out.save());
+      const dest = await io.uniquePath(`${dir}${sep}${io.stem(t.name)}-${String(k++).padStart(2, "0")}-${label}.pdf`);
+      await io.writeFile(dest, await out.save());
     }
   });
   toast(`${groups.length} fichier(s) créé(s) dans ${dir}`);
