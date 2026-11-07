@@ -9,6 +9,7 @@ import { $, $$, tab } from "./core.js";
 import { pageView, pushUndo, refreshAll } from "./editor.js";
 import { buildFinal, formBytes } from "./save.js";
 import { loadBytes, markDirty, openPdfBytes } from "./tabs.js";
+import { purgeUnreachable, removePageClean } from "./pdfclean.js";
 
 // ======================================================================= Pages
 
@@ -22,6 +23,7 @@ export async function restructure(t, fn, remapAnnots) {
   pushUndo(t, true);
   const pdf = await PDFDocument.load(await formBytes(t), { ignoreEncryption: true });
   await fn(pdf);
+  await purgeUnreachable(pdf); // une page supprimée ne reste pas cachée dans le fichier
   const bytes = await pdf.save();
   if (remapAnnots) t.annots = remapAnnots(t.annots);
   t.selected = null;
@@ -39,7 +41,7 @@ export async function rotatePage(i, delta) {
 export async function deletePage(i) {
   const t = tab();
   if (t.viewer.pagesCount <= 1) return toast("Impossible de supprimer la seule page du document.", true);
-  await restructure(t, (pdf) => pdf.removePage(i),
+  await restructure(t, (pdf) => removePageClean(pdf, i),
     (an) => an.filter((a) => a.page !== i).map((a) => (a.page > i ? { ...a, page: a.page - 1 } : a)));
 }
 export async function movePage(from, to) {

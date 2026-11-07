@@ -27,9 +27,11 @@ jobs:
         with: { workspaces: src-tauri }
       - name: Dépendances Linux
         if: startsWith(matrix.os, 'ubuntu')
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev qpdf
       - run: npm ci || npm install
-      - name: Tests Rust (sauvegarde des données)
+      - name: Tests JavaScript (nettoyage des PDF, masquage)
+        run: npm test
+      - name: Tests Rust (sauvegarde des données, écriture des PDF, chiffrement)
         shell: bash
         run: |
           npm run build

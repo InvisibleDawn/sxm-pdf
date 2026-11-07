@@ -1,5 +1,27 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-07 (soir) — Consolidation v1 · lot 1 : masquage, pages supprimées, enregistrement sûr
+
+Suite à l'audit technique (document « SXM PDF — Audit technique avant v1.0 »).
+- **S1 masquage réel** : le texte masqué restait dans le fichier (pdf-lib garde les objets inutilisés).
+  Nouveau module `src/pdfclean.js` : `purgeUnreachable` retire tout objet non atteignable (une page
+  retirée n'est jamais conservée, même si un signet ou un champ pointe vers elle) ; `removePageClean`
+  retire aussi les champs de formulaire de la page et corrige la liste des pages de pdf-lib
+  (non mise à jour après `removePage`). Utilisé par `applyRedactions`, `buildFinal` et `restructure`.
+- **I2 suppression de page** : la page supprimée n'est plus cachée dans le fichier.
+- **I1 écriture sûre des PDF** : `write_bytes` écrit dans un temporaire voisin puis remplace
+  (`atomic_write`, comme pour les données). Une coupure laisse l'original intact.
+- **S2 PDF protégés** : plus jamais écrits en clair à leur emplacement final (`io.writePdf` :
+  clair dans le dossier temporaire privé, chiffrement direct vers un temporaire voisin, remplacement
+  seulement si qpdf a réussi). Enregistrer, Envoyer, traitement par lot.
+- **S3** : mots de passe transmis à qpdf par fichier d'arguments privé (0600), plus en ligne de commande.
+- **S7** : `remove_temp` résout le chemin (« .. », liens) avant de supprimer.
+- Dossier temporaire privé `sxm-pdf/` (0700 sous Linux/macOS) pour les envois et le chiffrement.
+- Tests : `npm test` (6 tests, dont un témoin qui reproduit le défaut d'origine) ; Rust 24/24
+  (5 nouveaux : écriture sûre, échec sans perte, `remove_temp`, fichier d'arguments, chiffrement réel
+  avec qpdf). Masquage vérifié de bout en bout dans le navigateur avec `applyRedactions` : NIR et IBAN
+  introuvables dans tous les objets du fichier, en noir comme en flou. CI : `npm test` + qpdf sur Ubuntu.
+
 ## 2026-11-07 — Surligner sur les documents scannés
 
 - Sur une page scannée (image, sans texte), Sélectionner et Surligner ne faisaient rien, sans

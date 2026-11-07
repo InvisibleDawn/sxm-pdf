@@ -8,6 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { pdfjsLib } from "./pdfsetup.js";
 import { $, tab } from "./core.js";
 import { renderTabs, updateTitle } from "./tabs.js";
+import { purgeUnreachable, removePageClean } from "./pdfclean.js";
 
 // ======================================================================= Enregistrement
 
@@ -24,6 +25,7 @@ export async function buildFinal(t) {
     if (!vps.has(i)) vps.set(i, (await t.pdfDoc.getPage(i + 1)).getViewport({ scale: 1 }));
     return vps.get(i);
   });
+  await purgeUnreachable(pdf); // pages supprimées auparavant : effacées pour de bon du fichier
   const bytes = await pdf.save();
   const redacts = t.annots.filter((a) => a.type === "redact");
   return redacts.length ? applyRedactions(bytes, redacts) : bytes;
@@ -54,9 +56,10 @@ export async function applyRedactions(bytes, redacts) {
     const img = await pdf.embedJpg(jpg);
     const np = pdf.insertPage(i, [vp1.width, vp1.height]);
     np.drawImage(img, { x: 0, y: 0, width: vp1.width, height: vp1.height });
-    pdf.removePage(i + 1);
+    removePageClean(pdf, i + 1); // page d'origine retirée avec ses champs de formulaire
   }
   doc.destroy();
+  await purgeUnreachable(pdf); // le texte masqué n'existe plus nulle part dans le fichier
   return pdf.save();
 }
 
@@ -106,10 +109,7 @@ export async function sendDoc() {
   try {
     const name = /\.pdf$/i.test(t.name) ? t.name : t.name + ".pdf";
     const tmp = await invoke("temp_path", { name });
-    await busy("Préparation du mail…", async () => {
-      await io.writeFile(tmp, await buildFinal(t));
-      if (t.protect) await io.pdfEncrypt(tmp, tmp, t.protect);
-    });
+    await busy("Préparation du mail…", async () => io.writePdf(tmp, await buildFinal(t), t.protect));
     await invoke("send_mail", { path: tmp, subject: io.stem(name) });
     toast("Nouveau message ouvert avec « " + name + " » en pièce jointe.");
   } catch (e) {
@@ -128,8 +128,8 @@ export async function saveTab(t = tab(), as = false) {
   try {
     if (!(await confirmRedactions(t))) return false;
     const out = await busy("Enregistrement…", () => buildFinal(t));
-    await io.writeFile(path, out);
-    if (t.protect) await busy("Chiffrement…", () => io.pdfEncrypt(path, path, t.protect));
+    // Écriture sûre ; un PDF protégé n'est jamais écrit en clair à son emplacement final
+    await busy(t.protect ? "Chiffrement…" : "Enregistrement…", () => io.writePdf(path, out, t.protect));
     t.path = path; t.name = io.baseName(path); t.dirty = false;
     renderTabs(); updateTitle();
     toast("Enregistré : " + t.name);
