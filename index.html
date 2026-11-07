@@ -47,11 +47,11 @@
       <!-- Ruban simplifié (style nouvel Outlook) -->
       <section id="ribbon">
         <div class="rib-tabs">
-          <button data-rib="home" class="on">Accueil</button>
-          <button data-rib="annotate">Annoter</button>
-          <button data-rib="sign">Signer & masquer</button>
-          <button data-rib="pages">Pages</button>
-          <button data-rib="tools">Outils</button>
+          <button data-rib="home" class="on"><i data-lucide="house"></i><span>Accueil</span></button>
+          <button data-rib="annotate"><i data-lucide="pencil"></i><span>Annoter</span></button>
+          <button data-rib="sign"><i data-lucide="shield-check"></i><span>Signer & masquer</span></button>
+          <button data-rib="pages"><i data-lucide="files"></i><span>Pages</span></button>
+          <button data-rib="tools"><i data-lucide="wrench"></i><span>Outils</span></button>
         </div>
 
         <div class="rib-panel" data-panel="home">
@@ -89,7 +89,7 @@
           <button data-tool="note" title="Note (N)"><i data-lucide="message-square"></i></button>
           <button data-tool="ink" title="Stylo (P)"><i data-lucide="pencil"></i></button>
           <button data-tool="lasso" title="Entourer (O)"><i data-lucide="lasso"></i><span>Entourer</span></button>
-          <label class="chk" title="Remplir légèrement la zone entourée"><input type="checkbox" id="lassofill" /> remplir</label>
+          <label class="chk tgl" title="Remplir légèrement la zone entourée"><input type="checkbox" id="lassofill" /><i data-lucide="paint-bucket"></i></label>
           <button data-tool="rect" title="Rectangle (R)"><i data-lucide="square"></i></button>
           <button data-tool="ellipse" title="Ellipse (E)"><i data-lucide="circle"></i></button>
           <button data-tool="arrow" title="Flèche (A)"><i data-lucide="move-up-right"></i></button>
@@ -102,7 +102,7 @@
           <select id="fontsize" title="Taille du texte">
             <option value="10">10 pt</option><option value="12" selected>12 pt</option><option value="14">14 pt</option><option value="18">18 pt</option><option value="24">24 pt</option>
           </select>
-          <button data-act="delete" title="Supprimer l'annotation (Suppr)"><i data-lucide="trash"></i></button>
+          <button data-act="delete" class="danger" title="Supprimer l'annotation (Suppr)"><i data-lucide="trash"></i></button>
         </div>
 
         <div class="rib-panel hidden" data-panel="sign">
@@ -130,11 +130,11 @@
         </div>
 
         <div class="rib-panel hidden" data-panel="tools">
-          <button data-act="office2pdf"><i data-lucide="file-text"></i><span>Office → PDF</span></button>
-          <button data-act="img2pdf"><i data-lucide="image"></i><span>Images → PDF</span></button>
-          <button data-act="pdf2png"><i data-lucide="file-image"></i><span>PDF → PNG</span></button>
-          <button data-act="pdf2txt"><i data-lucide="file-down"></i><span>PDF → texte</span></button>
-          <button data-act="pdf2docx"><i data-lucide="file-text"></i><span>PDF → Word</span></button>
+          <button data-act="office2pdf" title="Word, Excel, PowerPoint → PDF"><i data-lucide="file-input"></i><span>Office → PDF</span></button>
+          <button data-act="img2pdf" title="Images → PDF"><i data-lucide="images"></i><span>Images → PDF</span></button>
+          <button data-act="pdf2png" title="PDF → images PNG"><i data-lucide="file-image"></i><span>PDF → PNG</span></button>
+          <button data-act="pdf2txt" title="PDF → texte"><i data-lucide="letter-text"></i><span>PDF → texte</span></button>
+          <button data-act="pdf2docx" title="PDF → Word"><i data-lucide="file-type"></i><span>PDF → Word</span></button>
           <span class="sep"></span>
           <button data-act="batch"><i data-lucide="package"></i><span>Traitement par lot</span></button>
           <button data-act="paraphe"><i data-lucide="pen-line"></i><span>Parapher tout</span></button>
@@ -145,14 +145,14 @@
       <main id="main">
         <aside id="sidebar">
           <div class="side-tabs">
-            <button data-side="pages" class="on">Pages</button>
-            <button data-side="annots">Annotations</button>
+            <button data-side="pages" class="on" title="Pages"><i data-lucide="layout-grid"></i><span>Pages</span></button>
+            <button data-side="annots" title="Annotations"><i data-lucide="message-square"></i><span>Notes</span></button>
           </div>
           <div id="side-pages" class="side-pane">
             <div class="side-actions">
-              <button data-act="insert-pdf" title="Ajouter les pages d'un autre PDF">+ PDF</button>
-              <button data-act="insert-image-page" title="Ajouter une image comme page">+ Image</button>
-              <button data-act="extract" title="Extraire des pages vers un nouveau PDF">Extraire</button>
+              <button data-act="insert-pdf" title="Ajouter les pages d'un autre PDF"><i data-lucide="file-plus"></i></button>
+              <button data-act="insert-image-page" title="Ajouter une image comme page"><i data-lucide="image-plus"></i></button>
+              <button data-act="extract" title="Extraire des pages vers un nouveau PDF"><i data-lucide="file-output"></i></button>
             </div>
             <div id="thumbs"></div>
           </div>

@@ -1,5 +1,19 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-06 (23 h) — Interface plus vivante, moins de texte
+
+- **Ruban** : outils en icônes colorées (une couleur par famille : fichiers bleu, surlignage jaune,
+  texte violet, formes orange, signature indigo, tampon rose, protection vert…), libellés déplacés
+  dans des info-bulles maison (pastille sombre + raccourci clavier). Onglets avec icônes, onglet
+  actif en pastille dégradée. « Capture » reste l'action vedette avec libellé.
+- **Rail de gauche** : tuiles d'icônes colorées, sans libellés (info-bulle à droite).
+- « remplir » (Entourer) devient un bouton-icône pot de peinture ; couleur en pastille ronde.
+- Barre latérale : onglets Pages / Notes en segment, boutons d'ajout en icônes ; miniatures :
+  pivoter / supprimer en icônes.
+- Accueil : titre en dégradé, cartes avec icônes pleines et effet au survol, fond légèrement coloré.
+- Bouton « Envoyer » en dégradé. Thème sombre : icônes éclaircies.
+- Aucun changement de fonctionnement (mêmes boutons, mêmes raccourcis).
+
 ## 2026-11-06 (19 h 30) — Corrections après essais sur Mac
 
 - **Impression (macOS)** : WKWebView ignore `window.print()`. Nouvelle commande Rust `print_window`

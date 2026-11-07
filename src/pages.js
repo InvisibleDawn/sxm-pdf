@@ -1,3 +1,4 @@
+import { createElement, RotateCcw, RotateCw, Trash2 } from "lucide";
 // Opérations sur les pages : pivoter, supprimer, déplacer, insérer, extraire, fusionner, diviser, miniatures.
 import { PDFDocument, degrees } from "pdf-lib";
 import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
@@ -129,9 +130,9 @@ export async function renderThumbs() {
     const item = el("div", { class: "thumb", draggable: "true", "data-i": i },
       c, el("span", { class: "num" }, String(i + 1)),
       el("div", { class: "ops" },
-        el("button", { title: "Pivoter à gauche", onclick: (e) => { e.stopPropagation(); rotatePage(i, -90); } }, "⟲"),
-        el("button", { title: "Pivoter à droite", onclick: (e) => { e.stopPropagation(); rotatePage(i, 90); } }, "⟳"),
-        el("button", { title: "Supprimer la page", onclick: async (e) => { e.stopPropagation(); if (await confirmBox("Supprimer la page", `Supprimer la page ${i + 1} ?`, "Supprimer")) deletePage(i); } }, "🗑")));
+        el("button", { title: "Pivoter à gauche", onclick: (e) => { e.stopPropagation(); rotatePage(i, -90); } }, createElement(RotateCcw)),
+        el("button", { title: "Pivoter à droite", onclick: (e) => { e.stopPropagation(); rotatePage(i, 90); } }, createElement(RotateCw)),
+        el("button", { class: "del", title: "Supprimer la page", onclick: async (e) => { e.stopPropagation(); if (await confirmBox("Supprimer la page", `Supprimer la page ${i + 1} ?`, "Supprimer")) deletePage(i); } }, createElement(Trash2))));
     item.addEventListener("click", () => { t.viewer.currentPageNumber = i + 1; });
     item.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/sxm-page", String(i)));
     item.addEventListener("dragover", (e) => { e.preventDefault(); item.classList.add("drop-before"); });
