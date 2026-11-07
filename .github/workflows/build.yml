@@ -43,6 +43,7 @@ jobs:
           exit ${PIPESTATUS[0]}
       - uses: actions/upload-artifact@v4
         if: always()
+        continue-on-error: true   # un incident d'envoi chez GitHub ne doit pas faire échouer des tests réussis
         with:
           name: resultats-tests-${{ matrix.os }}
           path: test-results.txt
