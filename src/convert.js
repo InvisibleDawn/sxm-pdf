@@ -19,7 +19,9 @@ export async function convertOffice(paths) {
   for (const p of paths) {
     try {
       const out = await busy(`Conversion de ${io.baseName(p)}…`, () => io.officeConvert(p, "pdf"));
-      const t = await openPdfBytes(await io.readFile(out), io.stem(p) + ".pdf", null);
+      let bytes;
+      try { bytes = await io.readFile(out); } finally { io.removeTemp(out); } // copie temporaire effacée
+      const t = await openPdfBytes(bytes, io.stem(p) + ".pdf", null);
       markDirty(t); // pas encore enregistré à côté du fichier d'origine
       t.suggestDir = io.dirName(p);
     } catch (e) { toast(String(e), true); }
@@ -47,7 +49,8 @@ export async function pdfToPng() {
       await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
       const blob = await new Promise((r) => c.toBlob(r, "image/png"));
       const sep = dir.includes("\\") ? "\\" : "/";
-      await io.writeFile(`${dir}${sep}${io.stem(t.name)}-page-${String(i).padStart(2, "0")}.png`, new Uint8Array(await blob.arrayBuffer()));
+      const dest = await io.uniquePath(`${dir}${sep}${io.stem(t.name)}-page-${String(i).padStart(2, "0")}.png`); // jamais d'écrasement
+      await io.writeFile(dest, new Uint8Array(await blob.arrayBuffer()));
     }
     doc.destroy();
   });
@@ -77,11 +80,14 @@ export async function pdfToText() {
 export async function pdfToDocx() {
   const t = tab(); if (!t) return toast("Ouvrez d'abord un PDF.", true);
   if (!t.path || t.dirty) return toast("Enregistrez d'abord le PDF, puis relancez la conversion.", true);
+  if (t.protect) return toast("Ce PDF est protégé par mot de passe : LibreOffice ne peut pas l'ouvrir. Retirez d'abord la protection (Signer & masquer), puis relancez.", true);
   if (!(await ensureTool("libreoffice"))) return;
   try {
     const out = await busy("Conversion vers Word…", () => io.officeConvert(t.path, "docx:MS Word 2007 XML", "writer_pdf_import"));
-    const dest = await io.savePath(io.stem(t.name) + ".docx", "Word", ["docx"]); if (!dest) return;
-    await io.writeFile(dest, await io.readFile(out));
+    try {
+      const dest = await io.savePath(io.stem(t.name) + ".docx", "Word", ["docx"]); if (!dest) return;
+      await io.writeFile(dest, await io.readFile(out));
+    } finally { io.removeTemp(out); } // copie temporaire effacée, même si l'enregistrement est annulé
     toast("Document Word créé. La mise en page peut différer légèrement de l'original.");
   } catch (e) { toast(String(e), true); }
 }

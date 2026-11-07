@@ -98,7 +98,14 @@ fn find_soffice(app: &tauri::AppHandle) -> Option<PathBuf> {
     candidates.iter().map(PathBuf::from).find(|p| p.exists())
 }
 
+/// Une conversion LibreOffice à la fois : le profil LibreOffice ne supporte pas deux instances.
+static CONVERT_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Durée maximale d'une conversion : au-delà, LibreOffice est arrêté.
+const CONVERT_TIMEOUT_S: u64 = 120;
+
 /// Conversion hors ligne via LibreOffice (Office → PDF, ou PDF → Word avec infilter).
+/// Chaque conversion écrit dans son propre dossier : un ancien résultat portant le même nom
+/// ne peut jamais être ouvert à la place du bon document.
 #[tauri::command]
 async fn office_convert(
     app: tauri::AppHandle,
@@ -109,41 +116,81 @@ async fn office_convert(
     let soffice = find_soffice(&app).ok_or(
         "LibreOffice est introuvable. Sous Fedora : sudo dnf install libreoffice-writer libreoffice-calc libreoffice-impress",
     )?;
-    let out_dir = std::env::temp_dir().join("sxm-pdf-conversions");
-    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
-    // Profil LibreOffice séparé : ne touche jamais au profil ni aux réglages de l'utilisateur.
-    let profile = std::env::temp_dir().join("sxm-pdf-lo-profile");
-    let profile_url = format!("file:///{}", profile.to_string_lossy().replace('\\', "/").trim_start_matches('/'));
-
-    let out_ext = to.split(':').next().unwrap_or("pdf").to_string();
-    let output = tauri::async_runtime::spawn_blocking(move || {
-        let mut cmd = Command::new(soffice);
-        cmd.arg(format!("-env:UserInstallation={profile_url}"))
-            .args(["--headless", "--norestore"]);
-        if let Some(f) = infilter {
-            cmd.arg(format!("--infilter={f}"));
-        }
-        cmd.args(["--convert-to", &to, "--outdir"])
-            .arg(&out_dir)
-            .arg(&path)
-            .output()
-            .map(|o| (o, out_dir, path))
+    tauri::async_runtime::spawn_blocking(move || {
+        let _g = CONVERT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+        convert_with(&soffice, &path, &to, infilter.as_deref(), CONVERT_TIMEOUT_S)
     })
     .await
     .map_err(|e| e.to_string())?
-    .map_err(|e| format!("Échec du lancement de LibreOffice : {e}"))?;
+}
 
-    let (out, out_dir, path) = output;
-    let stem = Path::new(&path).file_stem().unwrap_or_default().to_string_lossy().to_string();
-    let pdf = out_dir.join(format!("{stem}.{out_ext}"));
-    if pdf.exists() {
-        Ok(pdf.to_string_lossy().to_string())
-    } else {
-        Err(format!(
-            "La conversion a échoué.\n{}",
-            String::from_utf8_lossy(&out.stderr)
-        ))
+fn convert_with(soffice: &Path, path: &str, to: &str, infilter: Option<&str>, timeout_s: u64) -> Result<String, String> {
+    let out_dir = app_temp_dir().join("conversions").join(unique_suffix());
+    std::fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
+    // Profil LibreOffice séparé : ne touche jamais au profil ni aux réglages de l'utilisateur.
+    let profile = app_temp_dir().join("lo-profile");
+    let profile_url = format!("file:///{}", profile.to_string_lossy().replace('\\', "/").trim_start_matches('/'));
+    let out_ext = to.split(':').next().unwrap_or("pdf").to_string();
+
+    let mut cmd = Command::new(soffice);
+    cmd.arg(format!("-env:UserInstallation={profile_url}")).args(["--headless", "--norestore"]);
+    if let Some(f) = infilter {
+        cmd.arg(format!("--infilter={f}"));
     }
+    cmd.args(["--convert-to", to, "--outdir"]).arg(&out_dir).arg(path);
+    cmd.stdout(std::process::Stdio::null()).stderr(std::process::Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // pas de fenêtre console
+    }
+    let mut child = cmd.spawn().map_err(|e| format!("Échec du lancement de LibreOffice : {e}"))?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if start.elapsed().as_secs() >= timeout_s => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = std::fs::remove_dir_all(&out_dir);
+                return Err(format!(
+                    "La conversion a dépassé {timeout_s} secondes et a été arrêtée. Le document est peut-être trop lourd, abîmé ou protégé par mot de passe."
+                ));
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(200)),
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    let mut stderr = String::new();
+    if let Some(mut e) = child.stderr.take() {
+        use std::io::Read;
+        let _ = e.read_to_string(&mut stderr);
+    }
+    let stem = Path::new(path).file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let result = out_dir.join(format!("{stem}.{out_ext}"));
+    if result.exists() {
+        Ok(result.to_string_lossy().to_string())
+    } else {
+        let _ = std::fs::remove_dir_all(&out_dir);
+        Err(format!("La conversion a échoué.\n{stderr}"))
+    }
+}
+
+/// Chemin libre : « nom.pdf » s'il n'existe pas, sinon « nom (2).pdf », « nom (3).pdf »…
+#[tauri::command]
+fn unique_path(path: String) -> String {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return path;
+    }
+    let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    (2..10_000)
+        .map(|n| p.with_file_name(format!("{stem} ({n}){ext}")))
+        .find(|c| !c.exists())
+        .unwrap_or(p)
+        .to_string_lossy()
+        .to_string()
 }
 
 /// Capture d'écran. Sous Linux (Wayland/GNOME) : passe par le portail système,
@@ -1175,6 +1222,71 @@ mod tests {
         assert_eq!(std::fs::read(&dest).unwrap(), avant, "destination intacte après un échec");
         assert!(!sibling_tmp(&dest).exists());
     }
+
+    // ---------------------------------------------------------------- tests consolidation v1 (lot 2)
+
+    #[test]
+    fn nom_unique_sans_ecrasement() {
+        let d = dir("uniq");
+        let f = d.join("rapport.pdf");
+        assert_eq!(unique_path(f.to_string_lossy().to_string()), f.to_string_lossy());
+        std::fs::write(&f, b"1").unwrap();
+        assert_eq!(unique_path(f.to_string_lossy().to_string()), d.join("rapport (2).pdf").to_string_lossy());
+        std::fs::write(d.join("rapport (2).pdf"), b"2").unwrap();
+        assert_eq!(unique_path(f.to_string_lossy().to_string()), d.join("rapport (3).pdf").to_string_lossy());
+    }
+
+    /// Faux « soffice » (script) pour tester la conversion sans LibreOffice.
+    #[cfg(unix)]
+    fn fake_soffice(name: &str, script: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let p = dir(name).join("soffice");
+        std::fs::write(&p, format!("#!/bin/sh\n{script}\n")).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn conversion_ratee_n_ouvre_jamais_un_ancien_resultat() {
+        // 1re conversion réussie de « lettre.docx » → lettre.pdf
+        let ok = fake_soffice("lo-ok", r#"for a; do last="$a"; prev2="$prev"; prev="$a"; done
+outdir=""; n=0; for a; do if [ "$p" = "--outdir" ]; then outdir="$a"; fi; p="$a"; done
+b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
+        let doc = dir("lo-doc").join("lettre.docx");
+        std::fs::write(&doc, b"x").unwrap();
+        let r1 = convert_with(&ok, &doc.to_string_lossy(), "pdf", None, 10).unwrap();
+        assert_eq!(read(Path::new(&r1)), "PDF-OK\n");
+        // 2e conversion du même nom qui échoue sans rien produire : erreur, pas l'ancien fichier
+        let ko = fake_soffice("lo-ko", "echo 'erreur LibreOffice' >&2; exit 0");
+        let r2 = convert_with(&ko, &doc.to_string_lossy(), "pdf", None, 10);
+        assert!(r2.is_err(), "doit échouer au lieu de renvoyer {r2:?}");
+        assert!(r2.unwrap_err().contains("erreur LibreOffice"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn conversion_bloquee_arretee_apres_le_delai() {
+        let slow = fake_soffice("lo-slow", "sleep 30");
+        let doc = dir("lo-doc2").join("lourd.docx");
+        std::fs::write(&doc, b"x").unwrap();
+        let t = std::time::Instant::now();
+        let r = convert_with(&slow, &doc.to_string_lossy(), "pdf", None, 2);
+        assert!(r.unwrap_err().contains("dépassé 2 secondes"));
+        assert!(t.elapsed().as_secs() < 10, "LibreOffice doit être arrêté rapidement");
+    }
+
+    #[test]
+    fn vraie_conversion_libreoffice_si_installe() {
+        let Some(lo) = ["/usr/bin/soffice", "/Applications/LibreOffice.app/Contents/MacOS/soffice", r"C:\Program Files\LibreOffice\program\soffice.exe"]
+            .iter().map(PathBuf::from).find(|p| p.exists()) else { eprintln!("LibreOffice absent : test ignoré"); return };
+        let doc = dir("lo-vrai").join("lettre é.txt");
+        std::fs::write(&doc, "Lettre de test SXM\nDeuxième ligne").unwrap();
+        let pdf = convert_with(&lo, &doc.to_string_lossy(), "pdf", None, 120).unwrap();
+        let bytes = std::fs::read(&pdf).unwrap();
+        assert!(bytes.starts_with(b"%PDF"), "un vrai PDF doit être produit");
+        assert!(Path::new(&pdf).starts_with(app_temp_dir().join("conversions")));
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
@@ -1389,6 +1501,7 @@ fn main() {
             read_bytes,
             write_bytes,
             office_convert,
+            unique_path,
             capture_screen,
             print_window,
             set_default_pdf,
