@@ -159,11 +159,14 @@ jobs:
           # qpdf (protection par mot de passe) et ses bibliothèques copiés dans l'application :
           # le client n'a rien à installer. Version x86_64 (comme LibreOffice : Rosetta sur Apple Silicon).
           set -e
+          export HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1
           brew install qpdf dylibbundler
           mkdir -p src-tauri/qpdf/bin src-tauri/qpdf/lib
           cp "$(brew --prefix qpdf)/bin/qpdf" src-tauri/qpdf/bin/qpdf
           chmod u+w src-tauri/qpdf/bin/qpdf
-          dylibbundler -od -b -x src-tauri/qpdf/bin/qpdf -d src-tauri/qpdf/lib -p @executable_path/../lib/
+          # Chemins de recherche fournis et entrée fermée : dylibbundler ne doit jamais attendre une saisie
+          SEARCH=""; for d in "$(brew --prefix)/lib" "$(brew --prefix)"/opt/*/lib; do SEARCH="$SEARCH -s $d"; done
+          dylibbundler -od -b -x src-tauri/qpdf/bin/qpdf -d src-tauri/qpdf/lib -p @executable_path/../lib/ $SEARCH < /dev/null
           codesign --force -s - src-tauri/qpdf/lib/*.dylib src-tauri/qpdf/bin/qpdf
           otool -L src-tauri/qpdf/bin/qpdf
           # Aucune dépendance vers Homebrew ne doit rester
