@@ -1,5 +1,18 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot B : compilation reproductible et audit des dépendances
+
+- `npm ci` seul (plus de repli `npm install`) ; `cargo test --locked` et `tauri build -- --locked` :
+  la compilation échoue si un fichier de verrouillage n'est pas à jour, au lieu de résoudre d'autres versions.
+- Versions exactes pour les bibliothèques PDF critiques : pdf-lib 1.17.1, pdfjs-dist 4.10.38,
+  @pdf-lib/fontkit 1.1.1.
+- Nouvelle étape « audit » : cohérence de package-lock.json et Cargo.lock, `npm audit --audit-level=high`,
+  `cargo audit` (base RustSec). État au 08/11 : 0 vulnérabilité npm, 0 vulnérabilité Rust ; 5 avertissements
+  non bloquants dans des dépendances Linux de Tauri (bibliothèques non maintenues : proc-macro-error,
+  zbus_names, zvariant, zvariant_derive ; glib 0.18 `VariantStrIter`, non utilisé par SXM PDF).
+- Plus d'installateur « dégradé » : l'embarquement de qpdf et LibreOffice (Mac, Windows) n'est plus
+  facultatif ; en cas d'échec, la compilation échoue. Les installateurs attendent audit, tests 3 OS et Fedora.
+
 ## 2026-11-08 — Consolidation v2 · lot A : temporaires par utilisateur, écriture sûre renforcée
 
 - **Dossier temporaire propre à l'utilisateur** : sous Linux, `$XDG_RUNTIME_DIR/sxm-pdf` (en mémoire,

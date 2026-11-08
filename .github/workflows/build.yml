@@ -30,16 +30,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev qpdf
       - name: qpdf pour les tests (macOS)
         if: startsWith(matrix.os, 'macos')
-        continue-on-error: true
         run: brew install qpdf
-      - run: npm ci || npm install
+      - run: npm ci
       - name: Tests JavaScript (nettoyage des PDF, masquage)
         run: npm test
       - name: Tests Rust (sauvegarde des données, écriture des PDF, chiffrement)
         shell: bash
         run: |
           npm run build
-          cargo test --release --manifest-path src-tauri/Cargo.toml -- --test-threads=1 2>&1 | tee test-results.txt
+          cargo test --release --locked --manifest-path src-tauri/Cargo.toml -- --test-threads=1 2>&1 | tee test-results.txt
           exit ${PIPESTATUS[0]}
       - uses: actions/upload-artifact@v4
         if: always()
@@ -47,6 +46,28 @@ jobs:
         with:
           name: resultats-tests-${{ matrix.os }}
           path: test-results.txt
+
+  # 0) Dépendances : fichiers de verrouillage cohérents et aucune vulnérabilité connue
+  audit:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: package-lock.json cohérent avec package.json
+        run: npm ci --ignore-scripts
+      - name: Vulnérabilités npm (élevées ou critiques = échec)
+        run: npm audit --audit-level=high
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Cargo.lock cohérent avec Cargo.toml
+        run: cargo metadata --locked --format-version 1 --manifest-path src-tauri/Cargo.toml > /dev/null
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: Vulnérabilités Rust (RustSec)
+        run: cd src-tauri && cargo audit
 
   # 1 bis) Fedora 45 : tests, paquet .rpm construit sur Fedora, installation et lancement de l'appli.
   fedora:
@@ -58,15 +79,15 @@ jobs:
         run: dnf -y install git gcc gcc-c++ make curl file openssl-devel webkit2gtk4.1-devel librsvg2-devel nodejs npm rpm-build qpdf xorg-x11-server-Xvfb dbus-x11
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: npm ci || npm install
+      - run: npm ci
       - name: Tests JavaScript
         run: npm test
       - name: Tests Rust
         run: |
           npm run build
-          cargo test --release --manifest-path src-tauri/Cargo.toml -- --test-threads=1
+          cargo test --release --locked --manifest-path src-tauri/Cargo.toml -- --test-threads=1
       - name: Paquet .rpm
-        run: npx tauri build --bundles rpm
+        run: npx tauri build --bundles rpm -- --locked
       - name: Installation et démarrage sur Fedora
         run: |
           dnf -y install ./src-tauri/target/release/bundle/rpm/*.rpm
@@ -85,7 +106,7 @@ jobs:
 
   # 2) Installateurs — seulement si les tests passent, au lancement manuel ou sur un tag de version.
   build:
-    needs: tests
+    needs: [audit, tests, fedora]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
     timeout-minutes: 90
     strategy:
@@ -119,7 +140,6 @@ jobs:
       - name: Embarquer qpdf (Windows)
         if: matrix.os == 'windows-latest'
         timeout-minutes: 10
-        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -140,7 +160,6 @@ jobs:
       - name: Embarquer LibreOffice (Windows)
         if: matrix.os == 'windows-latest'
         timeout-minutes: 30
-        continue-on-error: true
         shell: pwsh
         run: |
           choco install libreoffice-fresh -y --no-progress --execution-timeout=1500
@@ -154,7 +173,6 @@ jobs:
       - name: Embarquer qpdf (macOS)
         if: startsWith(matrix.os, 'macos')
         timeout-minutes: 15
-        continue-on-error: true
         run: |
           # qpdf (protection par mot de passe) et ses bibliothèques copiés dans l'application :
           # le client n'a rien à installer. Version x86_64 (comme LibreOffice : Rosetta sur Apple Silicon).
@@ -178,7 +196,6 @@ jobs:
       - name: Embarquer LibreOffice (macOS)
         if: startsWith(matrix.os, 'macos')
         timeout-minutes: 30
-        continue-on-error: true
         run: |
           # Téléchargement direct sur le site officiel (le lien Homebrew était périmé).
           # Version x86_64 : fonctionne sur Mac Intel et, via Rosetta, sur Mac Apple Silicon.
@@ -195,9 +212,9 @@ jobs:
           test -x src-tauri/LibreOffice.app/Contents/MacOS/soffice
           node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.bundle.resources={...(c.bundle.resources||{}),'LibreOffice.app/':'LibreOffice.app/'};require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
 
-      - run: npm ci || npm install
+      - run: npm ci
       - name: Compiler
-        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ startsWith(matrix.os, 'macos') && '--target universal-apple-darwin' || '' }}
+        run: npx tauri build --bundles ${{ matrix.bundles }} ${{ startsWith(matrix.os, 'macos') && '--target universal-apple-darwin' || '' }} -- --locked
 
       - uses: actions/upload-artifact@v4
         with:
