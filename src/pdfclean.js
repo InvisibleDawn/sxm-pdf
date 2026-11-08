@@ -96,3 +96,54 @@ export function removePageClean(pdf, index) {
   pdf.removePage(index);
   pdf.pageCache?.invalidate?.();
 }
+
+/**
+ * Document masqué : retire aussi les données annexes qui pourraient révéler ce qui a été masqué
+ * ou des informations personnelles — propriétés du fichier (titre, auteur, sujet, mots-clés…),
+ * métadonnées XMP, pièces jointes (dans le document et sur les pages), JavaScript et actions
+ * automatiques. Les signets, liens internes et formulaires des autres pages sont conservés.
+ * À appeler avant purgeUnreachable(). Renvoie ce qui a été retiré.
+ */
+export function stripSensitiveExtras(pdf) {
+  const ctx = pdf.context;
+  const cat = pdf.catalog;
+  const report = { metadata: false, attachments: 0, javascript: 0 };
+  const isJs = (action) => {
+    const a = action instanceof PDFRef ? ctx.lookup(action) : action;
+    return a instanceof PDFDict && a.get(N("S")) === N("JavaScript");
+  };
+  // Propriétés du fichier et XMP
+  const infoRef = ctx.trailerInfo.Info;
+  const info = infoRef ? ctx.lookup(infoRef) : null;
+  if (info instanceof PDFDict && info.keys().length) report.metadata = true;
+  if (infoRef) ctx.trailerInfo.Info = ctx.register(ctx.obj({}));
+  if (cat.get(N("Metadata"))) { cat.delete(N("Metadata")); report.metadata = true; }
+  // Pièces jointes et JavaScript du document
+  const names = cat.lookupMaybe(N("Names"), PDFDict);
+  if (names) {
+    for (const k of ["EmbeddedFiles", "JavaScript"]) {
+      if (names.get(N(k))) {
+        if (k === "EmbeddedFiles") report.attachments++; else report.javascript++;
+        names.delete(N(k));
+      }
+    }
+  }
+  for (const k of ["Collection", "AF"]) if (cat.get(N(k))) { cat.delete(N(k)); report.attachments++; }
+  if (cat.get(N("AA"))) { cat.delete(N("AA")); report.javascript++; }
+  if (cat.get(N("OpenAction")) && isJs(cat.get(N("OpenAction")))) { cat.delete(N("OpenAction")); report.javascript++; }
+  // Pages : pièces jointes en annotation, actions automatiques et JavaScript des annotations
+  for (const page of pdf.getPages()) {
+    const node = page.node;
+    if (node.get(N("AA"))) { node.delete(N("AA")); report.javascript++; }
+    const annots = node.lookupMaybe(N("Annots"), PDFArray);
+    if (!annots) continue;
+    for (let i = annots.size() - 1; i >= 0; i--) {
+      const a = ctx.lookup(annots.get(i));
+      if (!(a instanceof PDFDict)) continue;
+      if (a.get(N("Subtype")) === N("FileAttachment")) { annots.remove(i); report.attachments++; continue; }
+      if (a.get(N("AA"))) { a.delete(N("AA")); report.javascript++; }
+      if (a.get(N("A")) && isJs(a.get(N("A")))) { a.delete(N("A")); report.javascript++; }
+    }
+  }
+  return report;
+}

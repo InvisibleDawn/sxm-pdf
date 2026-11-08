@@ -69,9 +69,8 @@ export function confirmBox(title, text, okLabel = "Oui", cancelLabel = "Annuler"
     m.append(el("h2", {}, title), el("p", {}, text));
     const row = el("div", { class: "row end" });
     if (third) row.append(el("button", { class: "btn", onclick: () => close("third") }, third));
-    row.append(
-      el("button", { class: "btn", onclick: () => close(false) }, cancelLabel),
-      el("button", { class: "btn accent", onclick: () => close(true) }, okLabel));
+    if (cancelLabel) row.append(el("button", { class: "btn", onclick: () => close(false) }, cancelLabel));
+    row.append(el("button", { class: "btn accent", onclick: () => close(true) }, okLabel));
     m.append(row);
   });
 }

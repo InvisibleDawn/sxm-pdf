@@ -14,7 +14,7 @@ async function contains(bytes, text) {
   if (raw.includes(text) || raw.toUpperCase().includes(hex(text))) return true;
   const doc = await PDFDocument.load(bytes, { updateMetadata: false });
   for (const [, obj] of doc.context.enumerateIndirectObjects()) {
-    if (!(obj instanceof PDFRawStream)) continue;
+    if (!(obj instanceof PDFRawStream)) { const t = obj.toString(); if (t.includes(text) || t.toUpperCase().includes(hex(text))) return true; continue; }
     let s;
     try { s = Buffer.from(decodePDFRawStream(obj).decode()).toString("latin1"); } catch { continue; }
     if (s.includes(text) || s.toUpperCase().includes(hex(text))) return true;

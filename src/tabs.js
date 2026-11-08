@@ -131,7 +131,9 @@ export async function openPdfBytes(bytes, name, path = null) {
   } catch (e) {
     if (e?.name === "PasswordException" && path && (await unlockInto(t, path))) return t;
     t.container.remove(); state.tabs = state.tabs.filter((x) => x !== t); activate(state.tabs.at(-1)?.id ?? null);
-    if (e?.name !== "PasswordException") toast("Impossible d'ouvrir ce PDF : " + (e?.message || e), true);
+    if (e?.name === "InvalidPDFException")
+      toast("Ce fichier PDF est abîmé ou incomplet (téléchargement interrompu ?) : il ne peut pas être ouvert. Le fichier n'a pas été modifié.", true);
+    else if (e?.name !== "PasswordException") toast("Impossible d'ouvrir ce PDF : " + (e?.message || e), true);
   }
   return t;
 }

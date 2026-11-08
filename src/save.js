@@ -8,7 +8,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { pdfjsLib } from "./pdfsetup.js";
 import { $, tab } from "./core.js";
 import { renderTabs, updateTitle } from "./tabs.js";
-import { purgeUnreachable, removePageClean } from "./pdfclean.js";
+import { purgeUnreachable, removePageClean, stripSensitiveExtras } from "./pdfclean.js";
 
 // ======================================================================= Enregistrement
 
@@ -60,6 +60,8 @@ export async function applyRedactions(bytes, redacts) {
     removePageClean(pdf, i + 1); // page d'origine retirée avec ses champs de formulaire
   }
   doc.destroy();
+  // Document masqué : propriétés (titre, auteur…), XMP, pièces jointes et JavaScript retirés aussi
+  stripSensitiveExtras(pdf);
   await purgeUnreachable(pdf); // le texte masqué n'existe plus nulle part dans le fichier
   return pdf.save();
 }
