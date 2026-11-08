@@ -1,5 +1,15 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot G : main.rs découpé en modules
+
+- `src-tauri/src/main.rs` (2 120 lignes) découpé par **déplacement pur** : `files.rs` (écriture sûre,
+  temporaires), `data.rs` (données utilisateur), `convert.rs` (LibreOffice), `capture.rs`, `qpdf.rs`,
+  `system.rs` (ouverture de fichiers, impression, messagerie, liens, épinglage, menu macOS). `main.rs`
+  garde le démarrage et les tests.
+- Découpage fait par un outil qui lit la syntaxe Rust ; vérification ligne à ligne : aucune ligne
+  d'origine absente, seules les déclarations de modules et `pub(crate)` ajoutés. Aucun changement de logique.
+- Tests Rust 40/40, compilation sans avertissement.
+
 ## 2026-11-08 — Consolidation v2 · lot F : plateformes, version et sommes de contrôle
 
 - Compilation : tests aussi sur **Ubuntu 24.04** (+ tests d'interface) ; nouvelle étape **Debian 13**
