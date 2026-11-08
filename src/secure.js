@@ -4,7 +4,7 @@ import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
 import * as io from "./io.js";
 import { drawOverlay, writeAnnots, shift, norm, newId, viewBox, LABELS, BOXY, pixelate } from "./annots.js";
 import { watermarkDialog, drawWatermark } from "./watermark.js";
-import { parapheDialog, parapheAnnots, searchRedactDialog, findMatches, batchDialog, batchAnnots } from "./rh.js";
+import { parapheDialog, parapheAnnots, searchRedactDialog, findUnmaskable, findMatches, batchDialog, batchAnnots } from "./rh.js";
 import { pdfjsLib } from "./pdfsetup.js";
 import { ensureTool } from "./app.js";
 import { $, $$, tab } from "./core.js";
@@ -42,6 +42,19 @@ export async function doSearchRedact() {
   $$("[data-side]").find((b) => b.dataset.side === "annots")?.click();
   t.viewer.currentPageNumber = matches[0].page + 1;
   toast(`🔍 ${matches.length} occurrence(s) masquée(s) sur ${pages} page(s).\nVérifiez le résultat avant d'enregistrer (Ctrl+Z pour annuler).`);
+  await warnUnmaskable(t, r.regexes);
+}
+
+/** Avertissement bien visible si le texte recherché reste dans des champs ou des signets. */
+async function warnUnmaskable(t, regexes) {
+  const u = await findUnmaskable(t.pdfDoc, regexes);
+  if (!u.fields && !u.outlines) return;
+  const parts = [];
+  if (u.fields) parts.push(`${u.fields} champ(s) de formulaire`);
+  if (u.outlines) parts.push(`${u.outlines} signet(s)`);
+  await confirmBox("⚠️ Texte encore présent",
+    `Le texte recherché apparaît aussi dans ${parts.join(" et ")}. Ces éléments ne sont pas masqués automatiquement : ` +
+    "videz les champs concernés et renommez ou supprimez les signets avant d'envoyer le document.", "J'ai compris", null);
 }
 
 export async function doBatch() {

@@ -129,6 +129,27 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * ce qui retrouve « FR76 3000 6000 … » comme « FR76300060… ».
  * Renvoie [{ page, rects:[[x1,y1,x2,y2]…], text }].
  */
+/**
+ * Le texte recherché apparaît-il aussi là où le masquage ne s'applique pas : valeurs des champs de
+ * formulaire et titres des signets ? Renvoie le nombre d'endroits concernés.
+ */
+export async function findUnmaskable(pdfDoc, regexes) {
+  const test = (txt) => regexes.some(({ re, despace }) => {
+    const r = new RegExp(re.source, re.flags.replace("g", ""));
+    return r.test(despace ? String(txt).replace(/\s+/g, "") : String(txt));
+  });
+  let fields = 0, outlines = 0;
+  try {
+    const objs = (await pdfDoc.getFieldObjects()) || {};
+    for (const list of Object.values(objs)) if (list.some((f) => f.value && test(f.value))) fields++;
+  } catch { /* pas de formulaire */ }
+  try {
+    const walk = (items) => { for (const it of items || []) { if (test(it.title || "")) outlines++; walk(it.items); } };
+    walk(await pdfDoc.getOutline());
+  } catch { /* pas de signets */ }
+  return { fields, outlines };
+}
+
 export async function findMatches(pdfDoc, regexes) {
   const found = [];
   for (let p = 1; p <= pdfDoc.numPages; p++) {
@@ -210,8 +231,12 @@ export function searchRedactDialog() {
       el("p", {}, "Rechercher aussi automatiquement :"),
       ...checks.map(([, c, l]) => el("label", { class: "row" }, c, l)),
       el("div", { class: "row" }, "Masquage :", mode),
-      el("p", { style: "font-size:12px" }, "ℹ️ Fonctionne sur les PDF contenant du texte. Pour un document scanné, utilisez l'outil ▦ Masquer à la main."),
-      el("p", { style: "font-size:12px" }, "ℹ️ Les valeurs saisies dans les champs de formulaire et les propriétés du fichier (titre, auteur) ne sont pas analysées : vérifiez-les avant d'envoyer le document."),
+      el("div", { class: "warn-box" },
+        el("b", {}, "⚠️ À vérifier avant d'envoyer le document"),
+        el("ul", {},
+          el("li", {}, "Seul le texte des pages est recherché. Un document scanné (image) : masquez à la main avec ▦ Masquer."),
+          el("li", {}, "Les champs de formulaire et les signets ne sont jamais masqués automatiquement : s'ils contiennent le texte recherché, SXM PDF vous le signalera."),
+          el("li", {}, "À l'enregistrement, les propriétés du fichier (titre, auteur, mots-clés), les pièces jointes et les scripts sont retirés."))),
       el("div", { class: "row end" }, el("button", { class: "btn", onclick: () => close(null) }, "Annuler"), el("button", { class: "btn accent", onclick: go }, "Rechercher et masquer")));
     setTimeout(() => term.focus(), 30);
   });

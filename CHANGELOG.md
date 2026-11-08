@@ -1,5 +1,19 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot C : masquage complet et avertissements visibles
+
+- Document masqué : à l'enregistrement, `stripSensitiveExtras` retire aussi les propriétés du fichier
+  (titre, auteur, sujet, mots-clés), les métadonnées XMP, les pièces jointes (document et annotations),
+  le JavaScript et les actions automatiques. Signets, liens internes et formulaires des autres pages sont
+  conservés. Vérifié : titre et auteur absents du fichier final, texte masqué introuvable.
+- Masquage par recherche : encadré d'avertissement bien visible ; après la recherche, SXM PDF signale
+  si le texte apparaît aussi dans des champs de formulaire ou des signets (non masqués automatiquement),
+  avec une fenêtre à confirmer.
+- PDF abîmé ou tronqué : message clair, fichier non modifié (vérifié avec un PDF tronqué à 60 %).
+- Tests : `npm test` 12/12 (nouveaux : témoin des données annexes, retrait complet avec contenu et
+  signets conservés, document sans annexes intact). L'outil de recherche des tests analyse maintenant
+  aussi les objets compressés (object streams) : les tests de la v1 passent toujours.
+
 ## 2026-11-08 — Consolidation v2 · lot B : compilation reproductible et audit des dépendances
 
 - `npm ci` seul (plus de repli `npm install`) ; `cargo test --locked` et `tauri build -- --locked` :

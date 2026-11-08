@@ -311,3 +311,8 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.8; flex: none; }
 :root[data-theme="dark"] .rail-btn:not(.small):not(:hover),
 :root[data-theme="dark"] .side-actions button:not(:hover),
 :root[data-theme="dark"] .top-actions .ghost[data-act] { color: color-mix(in srgb, var(--ic, var(--text)) 65%, #fff); }
+
+/* Encadré d'avertissement (masquage) */
+.warn-box { border: 1px solid #f59e0b; background: color-mix(in srgb, #f59e0b 12%, var(--panel)); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }
+.warn-box b { display: block; margin-bottom: 4px; color: color-mix(in srgb, #b45309 85%, var(--text)); }
+.warn-box ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
