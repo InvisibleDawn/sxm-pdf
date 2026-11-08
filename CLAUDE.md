@@ -17,9 +17,11 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - outils : `annots.js, sign.js, rh.js, watermark.js, capture.js, tooltip.js` ; données : `store.js`
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
-- natif : `src-tauri/src/main.rs` (34 tests `cargo test --release` dans `src-tauri`) ; tests JS : `npm test` (9)
+- natif : `src-tauri/src/` — `main.rs` (démarrage + 40 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
+  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (8, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
-  mots de passe qpdf par fichier d'arguments privé ; temporaires dans `<tmp>/sxm-pdf/` (nettoyés au démarrage).
+  mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
+  (Linux : `$XDG_RUNTIME_DIR/sxm-pdf`), nettoyés au démarrage ; noms de temporaires aléatoires (`create_new`).
 - données utilisateur : `~/.config/com.sxm.pdf/sxm-pdf-donnees.json` (+ `.bak`), file d'écriture unique
   côté JS (`enqueue`), verrou `DATA_LOCK` côté Rust, validation stricte des imports et des `.bak`.
 - Ne pas réécrire les modules qui fonctionnent ; ne supprimer aucune fonction ; tester après chaque changement.
@@ -43,6 +45,11 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Audit (31 problèmes) + rapport : document « SXM PDF — Audit technique avant v1.0 » (Claude Docs).
 - Branche `consolidation-v1`, 6 lots corrigés et testés ; à fusionner dans `main` après validation de Invisible_Dawn.
 - À confirmer sur Mac : double-clic Finder, Cmd+Q, qpdf embarqué, Envoyer (Mail/Outlook) ; Windows : capture 2e écran.
+
+## Consolidation v2 (08/11)
+- Branche `consolidation-v2` (à partir de v1) : lots A à G (temporaires, CI reproductible + audit, masquage complet,
+  tests d'interface, mémoire mesurée, Debian 13 / Ubuntu 24.04 / Mac ARM, version 1.2.0 + SHA-256, modules Rust).
+- Mesures mémoire et limites : voir CHANGELOG (lot E). Environnement de test sans DBus : chaque lancement = nouvelle instance.
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
