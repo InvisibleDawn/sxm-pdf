@@ -34,6 +34,9 @@ jobs:
       - run: npm ci
       - name: Tests JavaScript (nettoyage des PDF, masquage)
         run: npm test
+      - name: Tests de l'interface (fonctions PDF dans Chrome sans écran)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: npm run test:e2e
       - name: Tests Rust (sauvegarde des données, écriture des PDF, chiffrement)
         shell: bash
         run: |
