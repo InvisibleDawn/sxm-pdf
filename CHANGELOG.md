@@ -1,5 +1,20 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot D : tests automatisés des fonctions PDF
+
+- Nouvelle suite `npm run test:e2e` (`tests/e2e/fonctions-pdf.e2e.mjs`) : la vraie interface est chargée
+  dans Chrome sans écran ; Tauri est remplacé par un système de fichiers en mémoire et des boîtes de
+  dialogue préprogrammées ; chaque fichier enregistré est relu avec pdf-lib. 7 scénarios :
+  ouverture/enregistrement sans changement ; annotations (surlignage, texte, stylo, cadre, flèche, note
+  PDF) ; signature image et tampon daté ; rotation, déplacement, suppression de page puis Annuler
+  (la page supprimée n'est plus dans le fichier, elle revient avec sa rotation) ; fusion puis division
+  (et 2e division sans écrasement) ; masquage (texte et titre absents du fichier) ; deux enregistrements
+  simultanés (fichier final valide).
+- Test Rust de concurrence : 8 écritures simultanées du même PDF, 5 fois — le fichier est toujours
+  entièrement l'une des versions, jamais mélangé ni tronqué, aucun temporaire laissé.
+- CI : tests d'interface sur Ubuntu. `playwright-core` 1.65.0 (outil de test, sans navigateur téléchargé).
+- Tests : `npm test` 12/12, `npm run test:e2e` 7/7, Rust 40/40.
+
 ## 2026-11-08 — Consolidation v2 · lot C : masquage complet et avertissements visibles
 
 - Document masqué : à l'enregistrement, `stripSensitiveExtras` retire aussi les propriétés du fichier

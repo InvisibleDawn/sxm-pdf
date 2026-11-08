@@ -1801,6 +1801,35 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
         assert!(envoi.exists(), "pièce jointe récente conservée");
         let _ = std::fs::remove_file(&envoi);
     }
+
+    // ---------------------------------------------------------------- tests consolidation v2 (lot D)
+
+    #[test]
+    fn ecritures_simultanees_jamais_de_fichier_melange() {
+        let d = dir("concur");
+        let f = d.join("partage.pdf");
+        std::fs::write(&f, vec![b'0'; 200_000]).unwrap();
+        for _round in 0..5 {
+            let handles: Vec<_> = (1..=8u8)
+                .map(|k| {
+                    let f = f.clone();
+                    std::thread::spawn(move || {
+                        let payload = vec![b'0' + k; 200_000 + k as usize * 1000];
+                        write_file_safely(&f, &payload)
+                    })
+                })
+                .collect();
+            let ok = handles.into_iter().map(|h| h.join().unwrap()).filter(|r| r.is_ok()).count();
+            assert!(ok >= 1, "au moins une écriture aboutit");
+            // le fichier est toujours entièrement l'une des versions, jamais un mélange ni tronqué
+            let content = std::fs::read(&f).unwrap();
+            let k = content[0];
+            assert!(content.iter().all(|&b| b == k), "contenu homogène");
+            assert_eq!(content.len(), 200_000 + (k - b'0') as usize * 1000, "longueur complète");
+        }
+        let restes = std::fs::read_dir(&d).unwrap().filter(|e| e.as_ref().unwrap().file_name().to_string_lossy().contains("sxm-tmp")).count();
+        assert_eq!(restes, 0, "aucun fichier temporaire laissé");
+    }
 }
 
 /// Lit la copie de secours .bak sans rien modifier (pour la vérifier avant restauration).
