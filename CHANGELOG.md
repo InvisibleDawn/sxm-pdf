@@ -1,5 +1,18 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot F : plateformes, version et sommes de contrôle
+
+- Compilation : tests aussi sur **Ubuntu 24.04** (+ tests d'interface) ; nouvelle étape **Debian 13**
+  (conteneur : tests JS et Rust, .deb construit, installé avec apt et lancé 15 s) ; **Mac Apple Silicon**
+  (macos-15, arm64) : tests JS et Rust, sans bloquer les installateurs si GitHub n'a pas de machine libre.
+  Les installateurs attendent : audit, tests (Windows, Mac Intel, Ubuntu 22.04/24.04), Fedora 45, Debian 13.
+- Version **1.2.0** partout (package.json, Cargo.toml, tauri.conf.json) : les noms de fichiers des
+  installateurs correspondent enfin à la version publiée.
+- Publication : fichier **SHA256SUMS.txt** avec chaque release (vérification : `sha256sum -c SHA256SUMS.txt`).
+- Hors code (à la charge de Laurent) : compte développeur Apple pour la signature et la notarisation,
+  certificat Windows. Le .dmg reste « universal » mais LibreOffice et qpdf embarqués sont en version
+  Intel (Rosetta sur Apple Silicon).
+
 ## 2026-11-08 — Consolidation v2 · lot E : mémoire mesurée et maîtrisée
 
 Mesures sur l'appli compilée en version finale (Linux, WebKitGTK), une seule instance :

@@ -37,10 +37,14 @@ jobs:
           find artefacts -path "*fedora*" -name "*.rpm" -print0 | while IFS= read -r -d '' f; do cp "$f" "fichiers/$(basename "${f%.rpm}")-fedora45.rpm"; done
           cd fichiers
           for f in *; do mv "$f" "$(echo "$f" | tr ' ' '-')"; done
+          # Sommes de contrôle : chacun peut vérifier que son fichier n'a pas été altéré
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
           ls -lh
           gh release delete "${{ inputs.tag }}" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
           gh release create "${{ inputs.tag }}" * --repo "$GITHUB_REPOSITORY" --target "${{ github.ref_name }}" --prerelease \
             --title "SXM PDF ${{ inputs.tag }} — version de test" \
-            --notes "Installateurs de test (non signés). Tests automatiques validés sur Windows, macOS, Ubuntu et Fedora 45.
+            --notes "Installateurs de test (non signés). Tests automatiques validés sur Windows, macOS, Ubuntu 22.04/24.04, Debian 13 et Fedora 45. Détail des changements : CHANGELOG.md.
+          Vérification : sha256sum -c SHA256SUMS.txt (Linux/macOS : shasum -a 256 -c SHA256SUMS.txt ; Windows : Get-FileHash).
           Mac : clic droit > Ouvrir au premier lancement ; si « endommagé » : xattr -cr \"/Applications/SXM PDF.app\".
           Windows : SmartScreen > Informations complémentaires > Exécuter quand même."
