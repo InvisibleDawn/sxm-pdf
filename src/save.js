@@ -14,12 +14,18 @@ import { purgeUnreachable, removePageClean, stripSensitiveExtras } from "./pdfcl
 
 /** Octets du PDF courant avec formulaires remplis (sans nos annotations). */
 export async function formBytes(t) {
+  // Copie complète par pdf.js seulement si un champ de formulaire a été rempli
+  if (!formChanged(t)) return t.bytes;
   try { return await t.pdfDoc.saveDocument(); } catch { return t.bytes; }
 }
+const formChanged = (t) => (t.pdfDoc?.annotationStorage?.size || 0) > 0;
 
 /** PDF final : formulaires + annotations écrites dans le fichier. */
 export async function buildFinal(t) {
   if (t.encryptedNoTool) throw new Error("ce PDF est chiffré et qpdf n'est pas installé : impossible de produire une copie lisible.");
+  // Rien à écrire (ni annotation, ni formulaire rempli) : le document tel qu'il est, sans le
+  // réanalyser — pour un gros PDF, des centaines de Mo de mémoire en moins.
+  if (!t.annots.length && !formChanged(t)) return t.bytes;
   const pdf = await PDFDocument.load(await formBytes(t), { ignoreEncryption: true });
   const vps = new Map();
   await writeAnnots(pdf, t.annots, async (i) => {
@@ -130,6 +136,7 @@ export async function saveTab(t = tab(), as = false) {
     return false;
   }
   let path = t.path;
+  if (!as && path && !t.dirty) { toast("Aucune modification à enregistrer."); return true; } // fichier déjà à jour
   if (as || !path) {
     path = await io.savePath(t.path || (io.stem(t.name) + ".pdf"));
     if (!path) return false;

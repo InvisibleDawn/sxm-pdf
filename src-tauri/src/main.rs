@@ -224,6 +224,12 @@ fn convert_with(soffice: &Path, path: &str, to: &str, infilter: Option<&str>, ti
     }
 }
 
+/// Taille d'un fichier en octets (vérifiée avant d'ouvrir un très gros PDF).
+#[tauri::command]
+fn file_size(path: String) -> Result<u64, String> {
+    std::fs::metadata(&path).map(|m| m.len()).map_err(|e| e.to_string())
+}
+
 /// Chemin libre : « nom.pdf » s'il n'existe pas, sinon « nom (2).pdf », « nom (3).pdf »…
 #[tauri::command]
 fn unique_path(path: String) -> String {
@@ -2083,6 +2089,7 @@ fn main() {
             write_bytes,
             office_convert,
             unique_path,
+            file_size,
             capture_screen,
             print_window,
             set_default_pdf,

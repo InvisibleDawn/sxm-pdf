@@ -1,5 +1,30 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot E : mémoire mesurée et maîtrisée
+
+Mesures sur l'appli compilée en version finale (Linux, WebKitGTK), une seule instance :
+
+| Document | Appli vide | Ouvert | Pic rotation | Pic enregistrement | Après fermeture |
+| --- | --- | --- | --- | --- | --- |
+| 1 000 pages (1 Mo) | 620 Mo | 776 Mo | — | 859 Mo | 761 Mo |
+| 122 Mo (59 photos) | 618 Mo | 1 034 Mo | 1 440 Mo | 1 670 Mo | 1 028 Mo |
+| 241 Mo (117 photos) | 618 Mo | 1 313 Mo | 2 059 Mo | 2 529 Mo | 1 239 Mo |
+
+Aucune fuite : dans Chrome, après 4 cycles ouvrir/fermer, le tas JavaScript revient à son niveau de
+départ et aucun document, page ni visionneuse ne reste en vie. (Une première série de mesures montrait
++750 Mo par cycle : c'était un artefact, chaque ouverture lançant une nouvelle instance de l'appli
+dans l'environnement de test sans DBus.)
+
+- Enregistrer un document non modifié ne réécrit plus le fichier ; sans annotation ni formulaire rempli,
+  le PDF n'est plus réanalysé par pdf-lib ; pdf.js ne recopie le document que si un champ a été rempli.
+- Fermeture d'un onglet : visionneuse, document, octets, historique et miniatures libérés explicitement.
+- Miniatures : en attente sans mémoire réservée (canevas 1×1 + `aspect-ratio`), libérées loin de l'écran
+  et redessinées au retour (corrige le lot 6 qui réservait ~380 Mo pour 1 000 pages).
+- PDF de plus de 150 Mo : avertissement à l'ouverture ; plus de 1 Go : ouverture refusée avec un message
+  (commande `file_size`).
+- Tests : `npm run test:e2e` 8/8 (nouveau : un document non modifié n'est pas réécrit) ; tous les
+  chemins réels d'ajout d'annotation marquent bien le document « modifié » (vérifié dans le code).
+
 ## 2026-11-08 — Consolidation v2 · lot D : tests automatisés des fonctions PDF
 
 - Nouvelle suite `npm run test:e2e` (`tests/e2e/fonctions-pdf.e2e.mjs`) : la vraie interface est chargée
