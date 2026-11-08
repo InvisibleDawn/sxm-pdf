@@ -1,5 +1,25 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-08 — Consolidation v2 · lot A : temporaires par utilisateur, écriture sûre renforcée
+
+- **Dossier temporaire propre à l'utilisateur** : sous Linux, `$XDG_RUNTIME_DIR/sxm-pdf` (en mémoire,
+  effacé à la déconnexion), sinon `~/.cache/com.sxm.pdf/sxm-pdf` — plus jamais `/tmp/sxm-pdf` partagé
+  (un autre compte pouvait le créer avant SXM PDF). macOS et Windows : dossier temporaire de
+  l'utilisateur. Le dossier est vérifié (vrai dossier, pas un lien, propriétaire = utilisateur, 0700) ;
+  sinon un dossier neuf au nom aléatoire est utilisé. L'ancien `/tmp/sxm-pdf` est effacé s'il nous appartient.
+- **Écriture sûre** (`atomic_write`) : nom de temporaire aléatoire (aléa du système, `getrandom`),
+  `create_new` (refuse un fichier ou un lien symbolique déjà présent), `flush` + `sync_all`, droits du
+  document conservés, synchronisation du dossier après remplacement (déjà en place). Les restes d'un
+  enregistrement interrompu (plus de 10 min) sont effacés au prochain enregistrement du document.
+- Chiffrement qpdf : temporaire de sortie au nom aléatoire également.
+- Au démarrage, copies déchiffrées, arguments qpdf, captures et conversions sont effacés quel que soit
+  leur âge (aucune opération n'est en cours) ; pièces jointes envoyées : après 24 h.
+- `remove_temp` : refuse les liens symboliques ; accepte le dossier de l'appli et le dossier temporaire.
+- Tests Rust 39/39 (nouveaux : nom imprévisible, piège non écrasé, lien symbolique non suivi, droits
+  conservés, dossier privé, restes effacés, temporaires d'opération effacés au démarrage). Les 2 tests
+  d'échec d'écriture utilisent maintenant une simulation explicite (l'ancien piège ne fonctionne plus,
+  preuve que le nom n'est plus prévisible).
+
 ## 2026-11-07 (soir) — Consolidation v1 · lot 6 : performances et ergonomie
 
 - **P1** : historique « Annuler » limité à 300 Mo de copies de PDF (au moins 5 annulations gardées).

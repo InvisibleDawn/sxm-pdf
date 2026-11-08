@@ -70,7 +70,27 @@ fn sibling_tmp(path: &Path) -> PathBuf {
 }
 
 fn write_file_safely(path: &Path, data: &[u8]) -> Result<(), String> {
+    remove_stale_siblings(path);
     atomic_write(path, &sibling_tmp(path), data, &replace_file)
+}
+
+/// Restes d'un enregistrement interrompu (coupure, plantage) à côté du document : effacés s'ils ont
+/// plus de 10 minutes (un enregistrement en cours n'est jamais touché). L'original n'a pas été modifié.
+fn remove_stale_siblings(path: &Path) {
+    let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else { return };
+    let prefix = format!(".{}.sxm-tmp", name.to_string_lossy());
+    let Ok(rd) = std::fs::read_dir(if dir.as_os_str().is_empty() { Path::new(".") } else { dir }) else { return };
+    for e in rd.flatten() {
+        let n = e.file_name().to_string_lossy().to_string();
+        if !n.starts_with(&prefix) {
+            continue;
+        }
+        let Ok(m) = std::fs::symlink_metadata(e.path()) else { continue };
+        let age = m.modified().ok().and_then(|t| std::time::SystemTime::now().duration_since(t).ok()).unwrap_or_default();
+        if m.is_file() && age.as_secs() >= 600 {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
 }
 
 fn urlencode_decode(s: &str) -> String {
@@ -416,16 +436,91 @@ fn write_private_argfile(args: &[String]) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// Dossier temporaire propre à SXM PDF (privé sous Linux/macOS).
+/// Octets aléatoires sûrs (aléa du système) en hexadécimal.
+fn random_hex(n: usize) -> String {
+    let mut b = vec![0u8; n];
+    if getrandom::fill(&mut b).is_err() {
+        // Ne devrait jamais arriver ; repli non prévisible pour un autre processus
+        let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        b = (t ^ ((std::process::id() as u128) << 64)).to_le_bytes()[..n.min(16)].to_vec();
+    }
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// Dossier temporaire de SXM PDF, propre à l'utilisateur.
+/// - Linux : dossier d'exécution de l'utilisateur ($XDG_RUNTIME_DIR, en mémoire, effacé à la
+///   déconnexion), sinon ~/.cache/com.sxm.pdf/tmp — jamais dans /tmp partagé entre utilisateurs.
+/// - macOS et Windows : dossier temporaire du système, déjà propre à chaque utilisateur.
+/// Le dossier est vérifié : vrai dossier (pas un lien), appartenant à l'utilisateur, privé (0700).
+/// En cas de doute, un dossier neuf au nom aléatoire est créé à la place.
 fn app_temp_dir() -> PathBuf {
-    let dir = std::env::temp_dir().join("sxm-pdf");
-    let _ = std::fs::create_dir_all(&dir);
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let preferred = preferred_temp_base().join("sxm-pdf");
+        if prepare_private_dir(&preferred).is_ok() {
+            return preferred;
+        }
+        let fallback = preferred_temp_base().join(format!("sxm-pdf-{}", random_hex(8)));
+        let _ = prepare_private_dir(&fallback);
+        fallback
+    })
+    .clone()
+}
+
+fn preferred_temp_base() -> PathBuf {
+    #[cfg(target_os = "linux")]
+    {
+        if let Some(rt) = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from) {
+            if rt.is_absolute() && is_private_dir(&rt) {
+                return rt;
+            }
+        }
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            let c = home.join(".cache").join("com.sxm.pdf");
+            if std::fs::create_dir_all(&c).is_ok() {
+                return c;
+            }
+        }
+    }
+    std::env::temp_dir()
+}
+
+/// Crée (si besoin) et vérifie un dossier privé : pas un lien symbolique, propriétaire = utilisateur,
+/// aucun droit pour les autres.
+fn prepare_private_dir(dir: &Path) -> Result<(), String> {
+    let mut b = std::fs::DirBuilder::new();
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+        use std::os::unix::fs::DirBuilderExt;
+        b.mode(0o700);
     }
-    dir
+    match b.create(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    if is_private_dir(dir) { Ok(()) } else { Err("dossier temporaire non sûr".into()) }
+}
+
+#[cfg(unix)]
+extern "C" {
+    fn geteuid() -> u32;
+}
+
+fn is_private_dir(dir: &Path) -> bool {
+    let Ok(m) = std::fs::symlink_metadata(dir) else { return false };
+    if !m.is_dir() || m.file_type().is_symlink() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        m.uid() == unsafe { geteuid() } && m.mode() & 0o077 == 0
+    }
+    #[cfg(not(unix))]
+    {
+        true // Windows : %TEMP% est dans le profil de l'utilisateur (droits NTFS du profil)
+    }
 }
 
 /// Nettoyage au démarrage : fichiers temporaires de SXM PDF de plus de `max_age` (pièces jointes
@@ -433,11 +528,20 @@ fn app_temp_dir() -> PathBuf {
 /// Le profil LibreOffice est conservé (il accélère les conversions).
 fn cleanup_temp(max_age: std::time::Duration) -> usize {
     let now = std::time::SystemTime::now();
+    // Fichiers d'une seule opération (copie déchiffrée, chiffrement, arguments qpdf, capture,
+    // conversion) : au démarrage aucune opération n'est en cours, ils sont effacés quel que soit leur âge.
+    // Les pièces jointes envoyées (envoi/) attendent 24 h : le message peut être encore ouvert.
+    let one_shot = |p: &Path| {
+        let n = p.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+        ["dechiffre-", "chiffrement-", "qpdf-", "capture-"].iter().any(|x| n.starts_with(x))
+            || p.components().any(|c| c.as_os_str() == "conversions")
+    };
     let old = |p: &Path| {
-        std::fs::symlink_metadata(p)
-            .and_then(|m| m.modified())
-            .map(|t| now.duration_since(t).unwrap_or_default() >= max_age)
-            .unwrap_or(false)
+        one_shot(p)
+            || std::fs::symlink_metadata(p)
+                .and_then(|m| m.modified())
+                .map(|t| now.duration_since(t).unwrap_or_default() >= max_age)
+                .unwrap_or(false)
     };
     let mut removed = 0;
     fn walk(dir: &Path, old: &dyn Fn(&Path) -> bool, removed: &mut usize, keep: &Path) {
@@ -464,6 +568,11 @@ fn cleanup_temp(max_age: std::time::Duration) -> usize {
             removed += 1;
         }
     }
+    // v1.1.0-test (Linux) : ancien dossier partagé /tmp/sxm-pdf, effacé s'il nous appartient
+    let shared = tmp.join("sxm-pdf");
+    if shared != base && is_private_dir(&shared) && std::fs::remove_dir_all(&shared).is_ok() {
+        removed += 1;
+    }
     if let Ok(rd) = std::fs::read_dir(&tmp) {
         for e in rd.flatten() {
             let n = e.file_name().to_string_lossy().to_string();
@@ -476,9 +585,7 @@ fn cleanup_temp(max_age: std::time::Duration) -> usize {
 }
 
 fn unique_suffix() -> String {
-    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    format!("{t}-{}", N.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    random_hex(12)
 }
 
 /// Protège un PDF par mot de passe (AES-256). input peut être égal à output.
@@ -519,7 +626,11 @@ fn encrypt_with(qpdf: &Path, mut args: Vec<String>, input: &str, output: &str) -
         return run_qpdf_bin(qpdf, args);
     }
     let dest = PathBuf::from(output);
-    let tmp = sibling_tmp(&dest);
+    remove_stale_siblings(&dest);
+    let tmp = PathBuf::from(format!("{}.{}", sibling_tmp(&dest).to_string_lossy(), random_hex(8)));
+    if tmp.exists() || std::fs::symlink_metadata(&tmp).is_ok() {
+        return Err("Fichier temporaire déjà présent".into());
+    }
     args.push(tmp.to_string_lossy().to_string());
     let res = run_qpdf_bin(qpdf, args).and_then(|_| replace_file(&tmp, &dest).map_err(|e| format!("Remplacement impossible : {e}")));
     if res.is_err() {
@@ -590,8 +701,11 @@ fn remove_temp(path: String) {
 
 /// Vrai si le chemin, une fois résolu (liens et « .. » compris), est dans le dossier temporaire.
 fn is_in_temp(p: &Path) -> bool {
-    let (Ok(file), Ok(tmp)) = (p.canonicalize(), std::env::temp_dir().canonicalize()) else { return false };
-    file.starts_with(tmp) && file.is_file()
+    let Ok(file) = p.canonicalize() else { return false };
+    if !file.is_file() || std::fs::symlink_metadata(p).map(|m| m.file_type().is_symlink()).unwrap_or(true) {
+        return false;
+    }
+    [app_temp_dir(), std::env::temp_dir()].iter().filter_map(|d| d.canonicalize().ok()).any(|d| file.starts_with(d))
 }
 
 /// Ouvre un nouveau message dans la messagerie par défaut avec le PDF en pièce jointe.
@@ -928,6 +1042,12 @@ fn replace_file(src: &Path, dst: &Path) -> std::io::Result<()> {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Tests : simule un échec d'écriture du fichier temporaire (disque plein, droits…).
+    static FAIL_TMP_WRITE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 /// Écrit `content` dans `path` de façon atomique (fichier .tmp + remplacement), avec réessais
 /// si le fichier est momentanément verrouillé (antivirus, indexation, OneDrive…).
 fn atomic_write<R>(path: &Path, tmp: &Path, content: &[u8], rename: &R) -> Result<(), String>
@@ -935,10 +1055,31 @@ where
     R: Fn(&Path, &Path) -> std::io::Result<()>,
 {
     use std::io::Write;
+    // Nom réellement utilisé : préfixe donné + suffixe aléatoire (jamais prévisible, jamais partagé
+    // entre deux enregistrements simultanés). create_new refuse un fichier ou un lien déjà présent.
+    let tmp = &PathBuf::from(format!("{}.{}", tmp.to_string_lossy(), random_hex(8)));
     let write_tmp = || -> std::io::Result<()> {
-        let mut file = std::fs::File::create(tmp)?;
+        #[cfg(test)]
+        if FAIL_TMP_WRITE.with(|f| f.get()) {
+            return Err(std::io::Error::other("écriture du temporaire impossible (simulée)"));
+        }
+        let mut opts = std::fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            opts.mode(0o600);
+        }
+        let mut file = opts.open(tmp)?;
         file.write_all(content)?;
-        file.sync_all()
+        file.flush()?;
+        file.sync_all()?;
+        // Les droits du fichier remplacé sont conservés (Linux/macOS ; Windows hérite du dossier)
+        #[cfg(unix)]
+        if let Ok(m) = std::fs::metadata(path) {
+            std::fs::set_permissions(tmp, m.permissions())?;
+        }
+        Ok(())
     };
     if let Err(e) = write_tmp() {
         let _ = std::fs::remove_file(tmp);
@@ -1045,8 +1186,10 @@ mod tests {
     fn fichier_temporaire_impossible_a_creer() {
         let f = dir("tmp").join("sxm-pdf-donnees.json");
         save_json_file(&f, "{\"v\":1}").unwrap();
-        std::fs::create_dir_all(f.with_extension("json.tmp").join("bloque")).unwrap(); // le .tmp est un dossier
-        assert!(save_json_file(&f, "{\"v\":2}").is_err());
+        FAIL_TMP_WRITE.with(|x| x.set(true)); // disque plein, droits… : le temporaire ne peut pas être écrit
+        let r = save_json_file(&f, "{\"v\":2}");
+        FAIL_TMP_WRITE.with(|x| x.set(false));
+        assert!(r.is_err());
         assert_eq!(read(&f), "{\"v\":1}");
     }
 
@@ -1328,8 +1471,10 @@ mod tests {
         let d = dir("pdfwko");
         let f = d.join("original.pdf");
         std::fs::write(&f, b"ORIGINAL").unwrap();
-        std::fs::create_dir_all(sibling_tmp(&f).join("bloque")).unwrap(); // le temporaire est un dossier : écriture impossible
-        assert!(write_file_safely(&f, b"NOUVEAU").is_err());
+        FAIL_TMP_WRITE.with(|x| x.set(true)); // écriture du temporaire impossible
+        let r = write_file_safely(&f, b"NOUVEAU");
+        FAIL_TMP_WRITE.with(|x| x.set(false));
+        assert!(r.is_err());
         assert_eq!(std::fs::read(&f).unwrap(), b"ORIGINAL", "l'original doit rester intact");
     }
 
@@ -1566,6 +1711,95 @@ b=$(basename "$last"); echo "PDF-OK" > "$outdir/${b%.*}.pdf""#);
         for bad in ["file:///etc/passwd", "javascript:alert(1)", "smb://serveur/partage", "https://a.fr/\" & calc", "C:\\Windows\\system32\\calc.exe", "https://x.fr/a b"] {
             assert!(!is_safe_url(bad), "{bad} doit être refusé");
         }
+    }
+
+    // ---------------------------------------------------------------- tests consolidation v2 (lot A)
+
+    #[test]
+    fn temporaire_jamais_previsible_ni_ecrase() {
+        let d = dir("aleat");
+        let f = d.join("contrat.pdf");
+        std::fs::write(&f, b"V1").unwrap();
+        // un fichier piège au nom « classique » du temporaire n'est ni lu, ni écrasé, ni suivi
+        let piege = sibling_tmp(&f);
+        std::fs::write(&piege, b"PIEGE").unwrap();
+        write_file_safely(&f, b"V2").unwrap();
+        assert_eq!(std::fs::read(&f).unwrap(), b"V2");
+        assert_eq!(std::fs::read(&piege).unwrap(), b"PIEGE");
+        let a = random_hex(8);
+        assert_eq!(a.len(), 16);
+        assert_ne!(a, random_hex(8));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lien_symbolique_piege_non_suivi() {
+        let d = dir("lien");
+        let cible = d.join("cible-sensible.txt");
+        std::fs::write(&cible, b"NE PAS TOUCHER").unwrap();
+        let f = d.join("doc.pdf");
+        std::fs::write(&f, b"V1").unwrap();
+        // lien posé à l'avance par un tiers, même au nom exact d'un futur temporaire : create_new refuse
+        let fake = PathBuf::from(format!("{}.{}", sibling_tmp(&f).to_string_lossy(), "0000000000000000"));
+        std::os::unix::fs::symlink(&cible, &fake).unwrap();
+        write_file_safely(&f, b"V2").unwrap();
+        assert_eq!(std::fs::read(&cible).unwrap(), b"NE PAS TOUCHER");
+        // un dossier temporaire qui est un lien n'est jamais accepté comme privé
+        let lien_dossier = d.join("faux-dossier");
+        std::os::unix::fs::symlink(&d, &lien_dossier).unwrap();
+        assert!(!is_private_dir(&lien_dossier));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn droits_du_document_conserves_et_dossier_temporaire_prive() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = dir("droitsdoc");
+        let f = d.join("partage.pdf");
+        std::fs::write(&f, b"V1").unwrap();
+        std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o640)).unwrap();
+        write_file_safely(&f, b"V2").unwrap();
+        assert_eq!(std::fs::metadata(&f).unwrap().permissions().mode() & 0o777, 0o640);
+        let t = app_temp_dir();
+        assert!(is_private_dir(&t), "dossier temporaire privé : {t:?}");
+        #[cfg(target_os = "linux")]
+        assert!(!t.starts_with("/tmp") || std::env::var_os("XDG_RUNTIME_DIR").is_none() && std::env::var_os("HOME").is_none(),
+            "sous Linux, jamais dans /tmp partagé : {t:?}");
+        // dossier d'un autre propriétaire ou ouvert aux autres : refusé
+        let ouvert = d.join("ouvert");
+        std::fs::create_dir(&ouvert).unwrap();
+        std::fs::set_permissions(&ouvert, std::fs::Permissions::from_mode(0o777)).unwrap();
+        assert!(!is_private_dir(&ouvert));
+    }
+
+    #[test]
+    fn restes_d_un_enregistrement_interrompu_effaces() {
+        let d = dir("restes");
+        let f = d.join("doc.pdf");
+        std::fs::write(&f, b"V1").unwrap();
+        let vieux = PathBuf::from(format!("{}.aaaa", sibling_tmp(&f).to_string_lossy()));
+        let recent = PathBuf::from(format!("{}.bbbb", sibling_tmp(&f).to_string_lossy()));
+        std::fs::write(&vieux, b"x").unwrap();
+        std::fs::write(&recent, b"x").unwrap();
+        let il_y_a_1h = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options().write(true).open(&vieux).unwrap().set_modified(il_y_a_1h).unwrap();
+        write_file_safely(&f, b"V2").unwrap();
+        assert!(!vieux.exists(), "reste d'une coupure effacé");
+        assert!(recent.exists(), "enregistrement peut-être en cours : conservé");
+    }
+
+    #[test]
+    fn temporaires_d_une_operation_effaces_au_demarrage() {
+        let base = app_temp_dir();
+        let dech = base.join(format!("dechiffre-{}.pdf", unique_suffix()));
+        let args = base.join(format!("qpdf-{}.args", unique_suffix()));
+        let envoi = base.join("envoi").join(format!("Contrat-{}.pdf", unique_suffix()));
+        std::fs::create_dir_all(envoi.parent().unwrap()).unwrap();
+        for p in [&dech, &args, &envoi] { std::fs::write(p, b"x").unwrap(); }
+        cleanup_temp(std::time::Duration::from_secs(24 * 3600));
+        assert!(!dech.exists() && !args.exists(), "copie déchiffrée et arguments effacés même récents");
+        assert!(envoi.exists(), "pièce jointe récente conservée");
+        let _ = std::fs::remove_file(&envoi);
     }
 }
 
