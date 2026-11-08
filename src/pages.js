@@ -121,6 +121,14 @@ export async function extractPages() {
 // ---- Miniatures
 export let thumbJob = 0;
 let thumbObserver = null;
+
+/** Libère les miniatures (fermeture du dernier document) : rien ne doit retenir l'ancien PDF. */
+export function releaseThumbs() {
+  thumbObserver?.disconnect();
+  thumbObserver = null;
+  thumbJob++;
+  $("#thumbs")?.replaceChildren();
+}
 export async function renderThumbs() {
   const box = $("#thumbs");
   box.replaceChildren();
@@ -155,32 +163,34 @@ export async function renderThumbs() {
   box.append(end);
   highlightThumb();
 
-  // Miniatures dessinées seulement quand elles deviennent visibles (gros documents : mémoire et
-  // temps d'ouverture maîtrisés). Taille provisoire d'après la page 1 pour garder la mise en page.
+  // Miniatures dessinées seulement quand elles deviennent visibles, et libérées quand elles
+  // s'éloignent de l'écran (gros documents : mémoire maîtrisée). En attente, un canevas 1×1 ne
+  // réserve aucune mémoire ; les proportions viennent du CSS (aspect-ratio d'après la page 1).
   thumbObserver?.disconnect();
   try {
     const vp1 = (await doc.getPage(1)).getViewport({ scale: 1 });
-    const h = Math.round((260 * vp1.height) / vp1.width);
-    for (const c of box.querySelectorAll(".thumb canvas")) { c.width = 260; c.height = h; }
+    for (const c of box.querySelectorAll(".thumb canvas")) { c.width = 1; c.height = 1; c.style.aspectRatio = `${vp1.width} / ${vp1.height}`; }
   } catch { return; }
   let queue = Promise.resolve();
   const draw = (i, c) => (queue = queue.then(async () => {
-    if (job !== thumbJob || t.pdfDoc !== doc || !c.isConnected) return;
+    if (job !== thumbJob || t.pdfDoc !== doc || !c.isConnected || c.dataset.drawn) return;
     try {
       const page = await doc.getPage(i + 1);
       const vp = page.getViewport({ scale: 1 });
       const v2 = page.getViewport({ scale: 260 / vp.width });
-      c.width = v2.width; c.height = v2.height;
+      c.width = v2.width; c.height = v2.height; c.style.aspectRatio = `${v2.width} / ${v2.height}`;
       await page.render({ canvasContext: c.getContext("2d"), viewport: v2 }).promise;
+      c.dataset.drawn = "1";
+      page.cleanup();
     } catch { /* document remplacé pendant le rendu */ }
   }));
   thumbObserver = new IntersectionObserver((entries) => {
     for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      thumbObserver.unobserve(e.target);
-      draw(+e.target.dataset.i, e.target.querySelector("canvas"));
+      const c = e.target.querySelector("canvas");
+      if (e.isIntersecting) draw(+e.target.dataset.i, c);
+      else if (c.dataset.drawn) { delete c.dataset.drawn; c.width = 1; c.height = 1; } // libérée, redessinée au retour
     }
-  }, { root: null, rootMargin: "600px 0px" });
+  }, { root: null, rootMargin: "800px 0px" });
   for (const item of box.querySelectorAll(".thumb[data-i]")) thumbObserver.observe(item);
 }
 export function highlightThumb() {

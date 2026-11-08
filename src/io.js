@@ -57,6 +57,7 @@ export const pdfEncrypt = (input, output, o) =>
   invoke("pdf_encrypt", { input, output, userPw: o.user, ownerPw: o.owner, allowPrint: o.print, allowCopy: o.copy, allowModify: o.modify });
 export const pdfDecrypt = (input, password) => invoke("pdf_decrypt", { input, password });
 /** Chemin libre à côté de `path` (« nom (2).pdf »…) : un fichier existant n'est jamais écrasé. */
+export const fileSize = (path) => invoke("file_size", { path });
 export const uniquePath = (path) => invoke("unique_path", { path });
 export const pdfEncryptionInfo = (input, password) => invoke("pdf_encryption_info", { input, password });
 export const removeTemp = (path) => invoke("remove_temp", { path }).catch(() => {});

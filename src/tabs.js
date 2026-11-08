@@ -81,9 +81,18 @@ export async function closeTab(t) {
     if (r === false || r === null) return;
     if (r === true && !(await saveTab(t))) return;
   }
+  // WebKit ne rend la mémoire des images (canevas) qu'au passage de son ramasse-miettes, parfois
+  // très tard : on les vide explicitement avant de retirer l'onglet (mesuré : ~750 Mo par cycle sinon).
+  const shrink = (root) => root?.querySelectorAll("canvas").forEach((c) => { c.width = 0; c.height = 0; });
+  shrink(t.container);
+  if (state.active === t.id) shrink($("#thumbs"));
   t.container.remove();
+  // Libération complète : visionneuse, document pdf.js, octets et historique d'annulation
+  try { t.viewer?.setDocument(null); t.linkService?.setDocument(null); } catch { /* déjà libéré */ }
   t.pdfDoc?.destroy();
+  t.pdfDoc = null; t.bytes = null; t.undo = []; t.redo = []; t.annots = [];
   state.tabs = state.tabs.filter((x) => x !== t);
+  if (!state.tabs.length) (await import("./pages.js")).releaseThumbs();
   activate(state.tabs.at(-1)?.id ?? null);
 }
 
@@ -212,6 +221,24 @@ async function keepRights(path, pw) {
   }
 }
 
+/**
+ * Limites mesurées sur l'appli compilée (Linux, 08/11/2026) — PDF de 241 Mo : 1,3 Go ouvert,
+ * 2,1 Go au pic d'une rotation, 2,5 Go au pic d'enregistrement ; 1 000 pages (1 Mo) : 0,8 Go.
+ * Au-delà de 1 Go de fichier, l'ouverture est refusée (risque de manque de mémoire).
+ */
+const PDF_WARN_MB = 150, PDF_MAX_MB = 1024;
+async function sizeAllowed(path) {
+  let mb = 0;
+  try { mb = (await io.fileSize(path)) / 1048576; } catch { return true; } // taille inconnue : on laisse l'ouverture répondre
+  if (mb > PDF_MAX_MB) {
+    toast(`« ${io.baseName(path)} » pèse ${Math.round(mb)} Mo : c'est trop pour être ouvert sans risque. Divisez-le d'abord avec un autre outil, ou réduisez la taille de ses images.`, true);
+    return false;
+  }
+  if (mb > PDF_WARN_MB)
+    toast(`« ${io.baseName(path)} » est très volumineux (${Math.round(mb)} Mo). La lecture fonctionne ; modifier ou enregistrer peut demander jusqu'à environ 10 fois sa taille en mémoire : fermez les autres documents.`);
+  return true;
+}
+
 export async function openPaths(paths) {
   const pdfs = [], office = [], images = [];
   for (const p of paths) {
@@ -223,7 +250,10 @@ export async function openPaths(paths) {
   for (const p of pdfs) {
     const existing = state.tabs.find((t) => t.path === p);
     if (existing) { activate(existing.id); continue; }
-    try { await openPdfBytes(await io.readFile(p), io.baseName(p), p); } catch (e) { toast(String(e), true); }
+    try {
+      if (!(await sizeAllowed(p))) continue;
+      await openPdfBytes(await io.readFile(p), io.baseName(p), p);
+    } catch (e) { toast(String(e), true); }
   }
   if (office.length) await convertOffice(office);
   if (images.length) await imagesToPdf(images);

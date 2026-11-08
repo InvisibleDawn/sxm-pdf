@@ -138,11 +138,22 @@ test("ouvrir puis enregistrer sans modification : document identique", async () 
   await closeAll();
 });
 
+test("document non modifié : Ctrl+S ne réécrit pas le fichier", async () => {
+  const src = await makePdf(["Intact"]);
+  const path = await openInApp("intact.pdf", src);
+  await page.evaluate((p) => window.__fs.set(p, new Uint8Array([1, 2, 3])), path); // marqueur
+  const ok = await page.evaluate(async () => (await import("/src/save.js")).saveTab());
+  assert.equal(ok, true);
+  assert.deepEqual(await page.evaluate((p) => [...window.__fs.get(p)], path), [1, 2, 3], "aucune écriture");
+  await closeAll();
+});
+
 test("annotations : surlignage, texte, stylo, cadre, flèche, note — écrits dans le fichier", async () => {
   const path = await openInApp("annot.pdf", await makePdf(["Contrat de travail"]));
   await page.evaluate(async () => {
     const core = await import("/src/core.js"); const ed = await import("/src/editor.js");
     const t = core.tab(); const id = () => Math.random().toString(36).slice(2);
+    ed.pushUndo(t); // comme l'interface : l'ajout marque le document « modifié »
     t.annots.push(
       { id: id(), page: 0, type: "highlight", color: "#ffd400", rects: [[70, 755, 300, 785]] },
       { id: id(), page: 0, type: "text", color: "#d92d20", x: 100, y: 600, size: 14, text: "Vu et approuvé" },
@@ -172,6 +183,7 @@ test("signature (image) et tampon daté", async () => {
     const t = core.tab();
     const c = document.createElement("canvas"); c.width = 200; c.height = 80;
     const x = c.getContext("2d"); x.strokeStyle = "#0f172a"; x.lineWidth = 4; x.beginPath(); x.moveTo(10, 60); x.bezierCurveTo(60, 0, 120, 90, 190, 20); x.stroke();
+    ed.pushUndo(t);
     t.annots.push(
       { id: "sig", page: 0, type: "signature", src: c.toDataURL("image/png"), x1: 350, y1: 100, x2: 500, y2: 160 },
       { id: "tp", page: 0, type: "stamp", color: "#16a34a", label: "REÇU", date: "08/11/2026", x1: 60, y1: 100, x2: 220, y2: 170 });
@@ -250,6 +262,7 @@ test("masquage : texte et propriétés absents du fichier enregistré", async ()
   await page.evaluate(async () => {
     const core = await import("/src/core.js"); const ed = await import("/src/editor.js");
     const t = core.tab();
+    ed.pushUndo(t);
     t.annots.push({ id: "r", page: 0, type: "redact", mode: "black", x1: 60, y1: 740, x2: 400, y2: 790 });
     ed.refreshAll(t);
   });
@@ -270,7 +283,8 @@ test("masquage : texte et propriétés absents du fichier enregistré", async ()
 test("deux enregistrements lancés en même temps : fichier final valide", async () => {
   const path = await openInApp("concurrence.pdf", await makePdf(["X"]));
   await page.evaluate(async () => {
-    const core = await import("/src/core.js");
+    const core = await import("/src/core.js"); const ed = await import("/src/editor.js");
+    ed.pushUndo(core.tab());
     core.tab().annots.push({ id: "c", page: 0, type: "text", color: "#000000", x: 100, y: 600, size: 12, text: "Ajout" });
   });
   const res = await page.evaluate(async () => {
