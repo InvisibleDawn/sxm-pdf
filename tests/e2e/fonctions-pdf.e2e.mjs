@@ -297,3 +297,18 @@ test("deux enregistrements lancés en même temps : fichier final valide", async
   assert.match(p.text, /Ajout/);
   await closeAll();
 });
+
+test("bouton Accueil : affiche l'accueil sans fermer les documents, puis retour à l'onglet", async () => {
+  await openInApp("accueil.pdf", await makePdf(["Page A"]));
+  const visible = () => page.evaluate(() => !document.querySelector("#empty").classList.contains("hidden"));
+  assert.equal(await visible(), false);
+  await page.click('#rail [data-act="home"]');
+  assert.equal(await visible(), true);
+  assert.equal(await page.evaluate(() => document.body.classList.contains("at-home")), true);
+  assert.equal(await page.evaluate(async () => (await import("/src/core.js")).state.tabs.length), 1);
+  await page.click(".tab");
+  assert.equal(await visible(), false);
+  assert.match(await page.textContent("#app-version"), /^v\d+\.\d+\.\d+$/);
+  await closeAll();
+  assert.equal(await visible(), true);
+});

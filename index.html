@@ -9,16 +9,25 @@
   <div id="app">
     <!-- Barre latérale d'applications (style nouvel Outlook) -->
     <nav id="rail">
-      <div class="rail-logo" title="SXM PDF"><img src="/logo.png" alt="SXM PDF" /></div>
-      <button class="rail-btn" data-act="open" title="Ouvrir (Ctrl+O)"><i data-lucide="folder-open"></i><span>Ouvrir</span></button>
-      <button class="rail-btn" data-act="capture" title="Capture d'écran (Ctrl+Maj+X)"><i data-lucide="scissors"></i><span>Capture</span></button>
+      <div class="side-brand">
+        <img src="/logo.png" alt="" />
+        <div><b>SXM PDF</b><span id="app-version">v1.3.0</span></div>
+      </div>
+      <button class="rail-btn" data-act="home" title="Accueil"><i data-lucide="house"></i><span>Accueil</span></button>
+      <button class="rail-btn" data-act="open" title="Ouvrir (Ctrl+O)"><i data-lucide="folder-open"></i><span>Ouvrir un PDF</span></button>
+      <button class="rail-btn" data-act="capture" title="Capture d'écran (Ctrl+Maj+X)"><i data-lucide="scissors"></i><span>Capture d'écran</span></button>
       <button class="rail-btn" data-act="signature" title="Signer"><i data-lucide="signature"></i><span>Signer</span></button>
-      <button class="rail-btn" data-act="batch" title="Traitement par lot"><i data-lucide="package"></i><span>Lot</span></button>
-      <button class="rail-btn" data-act="send" title="Envoyer par mail"><i data-lucide="send"></i><span>Envoyer</span></button>
+      <button class="rail-btn" data-act="batch" title="Traitement par lot"><i data-lucide="package"></i><span>Traitement par lot</span></button>
+      <button class="rail-btn" data-act="send" title="Envoyer par mail"><i data-lucide="send"></i><span>Envoyer par mail</span></button>
+      <div class="side-sep"></div>
+      <button class="rail-btn small" data-act="theme" title="Thème clair / sombre"><i data-lucide="sun-moon"></i><span>Thème clair / sombre</span></button>
+      <button class="rail-btn small" data-act="pin" title="Épingler dans la barre des favoris"><i data-lucide="pin"></i><span>Épingler l'application</span></button>
+      <button class="rail-btn small" data-act="about" title="À propos"><i data-lucide="info"></i><span>À propos</span></button>
       <div class="rail-spacer"></div>
-      <button class="rail-btn small" data-act="pin" title="Épingler dans la barre des favoris"><i data-lucide="pin"></i></button>
-      <button class="rail-btn small" data-act="theme" title="Thème clair / sombre"><i data-lucide="sun-moon"></i></button>
-      <button class="rail-btn small" data-act="about" title="À propos"><i data-lucide="info"></i></button>
+      <div class="side-card">
+        <img src="/illustrations/document-signe.svg" alt="" />
+        <p>Vos PDF, simplement :<br />annoter, signer, protéger.<br /><b>100 % hors ligne.</b></p>
+      </div>
     </nav>
 
     <div id="column">
@@ -160,17 +169,33 @@
         </aside>
         <section id="docs">
           <div id="empty">
-            <div class="hello">
-              <h1>Bonjour 👋</h1>
-              <p>Que voulez-vous faire aujourd'hui ?</p>
+            <div class="hero">
+              <img class="hero-logo" src="/logo.png" alt="" />
+              <div class="hero-text">
+                <h1>SXM PDF</h1>
+                <p>Lisez, annotez, signez et protégez vos PDF.<br />Simple, rapide et 100 % hors ligne.</p>
+              </div>
+              <div class="hero-art" aria-hidden="true"></div>
             </div>
-            <div class="empty-grid">
-              <button data-act="open"><span class="ic" style="--ic:#0f6cbd"><i data-lucide="folder-open"></i></span><b>Ouvrir un PDF</b><span class="sub">Ctrl+O</span></button>
-              <button data-act="office2pdf"><span class="ic" style="--ic:#7c3aed"><i data-lucide="file-text"></i></span><b>Convertir un document</b><span class="sub">Word, Excel, PowerPoint</span></button>
-              <button data-act="batch"><span class="ic" style="--ic:#059669"><i data-lucide="package"></i></span><b>Traitement par lot</b><span class="sub">Signer, tamponner, parapher</span></button>
-              <button data-act="capture"><span class="ic" style="--ic:#ea580c"><i data-lucide="scissors"></i></span><b>Capture d'écran</b><span class="sub">Ctrl+Maj+X</span></button>
+            <div class="section-head"><i data-lucide="layout-grid"></i><h2>Que voulez-vous faire ?</h2></div>
+            <div class="home-grid">
+              <button class="home-card" data-act="open"><span class="ic" style="--ic:#1867d8"><i data-lucide="folder-open"></i></span>
+                <span class="txt"><b>Ouvrir un PDF</b><span>Lire, annoter, surligner et enregistrer.</span></span><span class="chip">Ctrl+O</span></button>
+              <button class="home-card" data-act="merge"><span class="ic" style="--ic:#0891b2"><i data-lucide="files"></i></span>
+                <span class="txt"><b>Fusionner des PDF</b><span>Assembler plusieurs fichiers en un seul.</span></span><span class="chip">Pages</span></button>
+              <button class="home-card" data-act="office2pdf"><span class="ic" style="--ic:#7c3aed"><i data-lucide="file-input"></i></span>
+                <span class="txt"><b>Convertir un document</b><span>Word, Excel, PowerPoint vers PDF.</span></span><span class="chip">Hors ligne</span></button>
+              <button class="home-card" data-act="img2pdf"><span class="ic" style="--ic:#16a34a"><i data-lucide="images"></i></span>
+                <span class="txt"><b>Images vers PDF</b><span>Photos et scans réunis en un seul PDF.</span></span><span class="chip">JPG, PNG</span></button>
+              <button class="home-card" data-act="capture"><span class="ic" style="--ic:#ea580c"><i data-lucide="scissors"></i></span>
+                <span class="txt"><b>Capture d'écran</b><span>Capturer, annoter, ajouter au PDF.</span></span><span class="chip">Ctrl+Maj+X</span></button>
+              <button class="home-card" data-act="batch"><span class="ic" style="--ic:#059669"><i data-lucide="package"></i></span>
+                <span class="txt"><b>Traitement par lot</b><span>Signer, tamponner, parapher en série.</span></span><span class="chip">Profils</span></button>
             </div>
-            <p class="hint">Ou glissez-déposez vos fichiers ici.</p>
+            <div class="home-bottom">
+              <div class="dropzone"><i data-lucide="upload"></i><div><b>Glissez-déposez vos PDF ici</b><span>Ils s'ouvrent chacun dans un onglet.</span></div></div>
+              <button class="btn-xl" data-act="open"><i data-lucide="folder-open"></i>Ouvrir un PDF</button>
+            </div>
           </div>
         </section>
       </main>

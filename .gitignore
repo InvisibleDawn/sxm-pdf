@@ -6,3 +6,4 @@ src-tauri/libreoffice/
 src-tauri/qpdf/
 src-tauri/LibreOffice.app/
 *.log
+.shots/

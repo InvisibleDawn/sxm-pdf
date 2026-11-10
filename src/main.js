@@ -8,8 +8,8 @@ import { message, open } from "@tauri-apps/plugin-dialog";
 import * as db from "./store.js";
 import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
 import * as io from "./io.js";
-import { createIcons, Image as ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid } from "lucide";
-const ICONS = { Image: ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid };
+import { createIcons, Image as ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload } from "lucide";
+const ICONS = { Image: ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload };
 import { initTooltips } from "./tooltip.js";
 import { about, applyTheme, exportData, firstRunWelcome, importData, initTheme, pinApp, setDefault, initSaveStatus } from "./app.js";
 import { convertOffice, doCapture, imagesToPdf, pdfToDocx, pdfToPng, pdfToText } from "./convert.js";
@@ -19,6 +19,7 @@ import { extractPages, insertImagePage, insertPdf, mergePdfs, splitPdf, zoom } f
 import { printDoc, saveTab, sendDoc } from "./save.js";
 import { doBatch, doParaphe, doSearchRedact, doWatermark, protectDialog, unprotect } from "./secure.js";
 import { activate, closeTab, openPaths } from "./tabs.js";
+import { version as APP_VERSION } from "../package.json";
 
 const ACTIONS = {
   open: async () => openPaths(io.toArray(await io.pickPdf(true))),
@@ -38,6 +39,7 @@ const ACTIONS = {
   "insert-pdf": insertPdf, "insert-image-page": insertImagePage, extract: extractPages,
   theme: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"),
   "default-pdf": setDefault, about,
+  home: () => activate(null), // retour à l'accueil, les documents restent ouverts dans leurs onglets
 };
 
 document.addEventListener("click", (e) => {
@@ -190,6 +192,7 @@ initTooltips();
 initTheme();
 firstRunWelcome();
 setTool("select");
+{ const v = document.querySelector("#app-version"); if (v) v.textContent = "v" + APP_VERSION; }
 activate(null);
 io.startupArgs().then(handleArgs).catch(() => {});
 window.__sxm = { message };
