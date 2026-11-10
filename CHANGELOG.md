@@ -1,5 +1,24 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-10 — Design v3 (version 1.3.0)
+
+Nouvelle interface inspirée des maquettes « Linux USB Creator » et « SXM Multiboot » du projet.
+Aucune fonction retirée, aucun module réécrit : HTML de la barre latérale et de l'accueil remplacé,
+styles ajoutés en fin de `style.css` (bloc « Design v3 »), thème sombre conservé.
+
+- **Barre latérale à libellés** (232 px) : logo, nom, numéro de version (lu dans `package.json`),
+  Accueil / Ouvrir / Capture / Signer / Lot / Envoyer, puis Thème / Épingler / À propos, et une carte
+  illustrée en bas. Élément actif = pastille bleue. Sous 1000 px de large : icônes seules.
+- **Nouvelle action « Accueil »** : revient à l'écran d'accueil sans fermer les documents ouverts
+  (`activate(null)` ; `activate()` affiche l'accueil quand aucun onglet n'est actif).
+- **Accueil** : bandeau avec illustration originale d'une baie tropicale (`public/illustrations/baie.svg`,
+  fondu à gauche), titre, 6 cartes d'action (Ouvrir, Fusionner, Convertir, Images → PDF, Capture, Lot)
+  avec icône ronde, description et étiquette, zone de dépôt et grand bouton bleu « Ouvrir un PDF ».
+  Le panneau des miniatures est masqué sur l'accueil.
+- Palette : fond `#f3f6fb`, bleu `#1867d8`, cartes blanches arrondies (14–16 px).
+- Tests : `npm test` 12/12, interface 9/9 (nouveau test du bouton Accueil), Rust 40/40, contrôle visuel
+  dans l'application compilée (WebKitGTK sous Xvfb) en clair, sombre, 1280, 1440 et 960 px.
+
 ## 2026-11-08 — Consolidation v2 · lot G : main.rs découpé en modules
 
 - `src-tauri/src/main.rs` (2 120 lignes) découpé par **déplacement pur** : `files.rs` (écriture sûre,

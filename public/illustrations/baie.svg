@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid slice">
+  <!-- Bandeau original SXM PDF : baie tropicale stylisée (dessin vectoriel libre) -->
+  <defs>
+    <linearGradient id="ciel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cfe9fb"/><stop offset=".6" stop-color="#eaf6fd"/><stop offset="1" stop-color="#fdf6e8"/>
+    </linearGradient>
+    <linearGradient id="mer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2bb3c9"/><stop offset=".45" stop-color="#3fc7d3"/><stop offset="1" stop-color="#8fe3df"/>
+    </linearGradient>
+    <linearGradient id="mornes1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7fae8f"/><stop offset="1" stop-color="#5d8f72"/>
+    </linearGradient>
+    <linearGradient id="mornes2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f9a5e"/><stop offset="1" stop-color="#2f7a46"/>
+    </linearGradient>
+    <linearGradient id="sable" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbe7c2"/><stop offset="1" stop-color="#f3d39c"/>
+    </linearGradient>
+    <radialGradient id="soleil" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#fff7d6"/><stop offset="1" stop-color="#fff7d6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="320" fill="url(#ciel)"/>
+  <circle cx="930" cy="70" r="110" fill="url(#soleil)"/>
+  <!-- nuages -->
+  <g fill="#ffffff" opacity=".85">
+    <ellipse cx="420" cy="58" rx="60" ry="14"/><ellipse cx="455" cy="48" rx="34" ry="14"/>
+    <ellipse cx="760" cy="40" rx="48" ry="11"/><ellipse cx="1090" cy="62" rx="56" ry="12"/>
+  </g>
+  <!-- mornes lointains -->
+  <path d="M300 170 C380 120 450 95 520 110 C590 125 620 80 690 70 C760 60 800 105 860 110 C930 116 980 80 1050 92 C1110 102 1160 130 1200 140 L1200 200 L300 200 Z" fill="url(#mornes1)" opacity=".75"/>
+  <!-- mornes proches -->
+  <path d="M520 200 C600 150 660 140 720 150 C790 162 830 118 900 112 C980 106 1030 150 1100 150 C1150 150 1180 165 1200 172 L1200 230 L520 230 Z" fill="url(#mornes2)"/>
+  <!-- petites maisons colorées sur le morne -->
+  <g>
+    <g transform="translate(760 150)"><rect width="16" height="12" fill="#ffffff"/><path d="M-2 0 L8 -8 L18 0 Z" fill="#e4572e"/></g>
+    <g transform="translate(790 160)"><rect width="14" height="11" fill="#ffd166"/><path d="M-2 0 L7 -7 L16 0 Z" fill="#c0392b"/></g>
+    <g transform="translate(822 146)"><rect width="16" height="12" fill="#ffffff"/><path d="M-2 0 L8 -8 L18 0 Z" fill="#2a9d8f"/></g>
+    <g transform="translate(855 158)"><rect width="13" height="10" fill="#f4a3c0"/><path d="M-2 0 L6.5 -7 L15 0 Z" fill="#e4572e"/></g>
+    <g transform="translate(890 140)"><rect width="16" height="12" fill="#ffffff"/><path d="M-2 0 L8 -8 L18 0 Z" fill="#3a86ff"/></g>
+    <g transform="translate(925 152)"><rect width="14" height="11" fill="#a0e7e5"/><path d="M-2 0 L7 -7 L16 0 Z" fill="#c0392b"/></g>
+    <g transform="translate(965 146)"><rect width="16" height="12" fill="#ffffff"/><path d="M-2 0 L8 -8 L18 0 Z" fill="#e76f51"/></g>
+    <g transform="translate(1005 160)"><rect width="14" height="11" fill="#ffd166"/><path d="M-2 0 L7 -7 L16 0 Z" fill="#2a9d8f"/></g>
+    <g transform="translate(1045 152)"><rect width="16" height="12" fill="#ffffff"/><path d="M-2 0 L8 -8 L18 0 Z" fill="#c0392b"/></g>
+  </g>
+  <!-- mer -->
+  <path d="M0 205 L1200 205 L1200 320 L0 320 Z" fill="url(#mer)"/>
+  <!-- reflets -->
+  <g stroke="#ffffff" stroke-linecap="round" opacity=".55">
+    <path d="M380 228 h60 M470 240 h40 M610 232 h70 M720 250 h50 M840 236 h60 M520 262 h80" stroke-width="2.5"/>
+  </g>
+  <!-- plage -->
+  <path d="M600 320 C700 268 860 250 1000 255 C1090 258 1160 268 1200 276 L1200 320 Z" fill="url(#sable)"/>
+  <path d="M610 316 C710 266 860 250 1000 255 C1090 258 1160 268 1200 276" fill="none" stroke="#ffffff" stroke-width="5" opacity=".8"/>
+  <!-- palmiers -->
+  <g stroke-linecap="round">
+    <path d="M1080 300 C1086 270 1092 245 1104 222" stroke="#7a5a3a" stroke-width="7" fill="none"/>
+    <g fill="#2f7a46">
+      <path d="M1104 222 C1080 210 1060 214 1046 228 C1068 220 1088 222 1104 222 Z"/>
+      <path d="M1104 222 C1126 206 1150 208 1166 222 C1144 216 1124 218 1104 222 Z"/>
+      <path d="M1104 222 C1098 200 1084 188 1066 186 C1084 196 1096 208 1104 222 Z"/>
+      <path d="M1104 222 C1114 200 1130 190 1148 190 C1130 200 1116 210 1104 222 Z"/>
+    </g>
+    <path d="M1150 306 C1152 284 1156 266 1164 250" stroke="#7a5a3a" stroke-width="6" fill="none"/>
+    <g fill="#3f9156">
+      <path d="M1164 250 C1146 240 1128 242 1118 254 C1136 248 1150 250 1164 250 Z"/>
+      <path d="M1164 250 C1180 238 1196 240 1206 250 C1190 246 1176 248 1164 250 Z"/>
+      <path d="M1164 250 C1160 232 1150 222 1136 220 C1150 228 1158 238 1164 250 Z"/>
+    </g>
+  </g>
+  <!-- voilier -->
+  <g transform="translate(470 196)">
+    <path d="M0 22 L44 22 L38 30 L6 30 Z" fill="#ffffff"/>
+    <path d="M22 20 L22 -18 L40 18 Z" fill="#ffffff"/><path d="M20 20 L20 -10 L6 18 Z" fill="#f4f8fb"/>
+    <path d="M21 -18 L21 22" stroke="#6b7280" stroke-width="1.2"/>
+  </g>
+</svg>

@@ -64,7 +64,9 @@ export function createTab(name, path) {
 export function activate(id) {
   state.active = id;
   for (const t of state.tabs) t.container.classList.toggle("hidden", t.id !== id);
-  $("#empty").classList.toggle("hidden", state.tabs.length > 0);
+  const home = !state.tabs.some((t) => t.id === id);
+  $("#empty").classList.toggle("hidden", !home);
+  document.body.classList.toggle("at-home", home);
   renderTabs(); renderThumbs(); renderAnnotList(); updatePageInfo(); updateTitle(); applyToolCursor();
 }
 

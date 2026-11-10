@@ -18,7 +18,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
 - natif : `src-tauri/src/` — `main.rs` (démarrage + 40 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
-  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (8, Chrome sans écran)
+  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (9, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
   (Linux : `$XDG_RUNTIME_DIR/sxm-pdf`), nettoyés au démarrage ; noms de temporaires aléatoires (`create_new`).
@@ -50,6 +50,11 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Branche `consolidation-v2` (à partir de v1) : lots A à G (temporaires, CI reproductible + audit, masquage complet,
   tests d'interface, mémoire mesurée, Debian 13 / Ubuntu 24.04 / Mac ARM, version 1.2.0 + SHA-256, modules Rust).
 - Mesures mémoire et limites : voir CHANGELOG (lot E). Environnement de test sans DBus : chaque lancement = nouvelle instance.
+
+## Design v3 (10/11) — version 1.3.0
+- Branche `design-v3` (à partir de v2) : barre latérale à libellés, accueil illustré (`public/illustrations/`),
+  action `home`, styles dans le bloc « Design v3 » en fin de `style.css`. Release `v1.3.0-test` pour essai Windows 11 (DRH).
+- Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).

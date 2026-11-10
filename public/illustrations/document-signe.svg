@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 200">
+  <!-- Illustration originale SXM PDF : document signé -->
+  <defs>
+    <linearGradient id="vague" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e3efff"/><stop offset="1" stop-color="#cfe2ff"/>
+    </linearGradient>
+    <linearGradient id="bleu" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f7cf6"/><stop offset="1" stop-color="#1550b8"/>
+    </linearGradient>
+    <filter id="ombre" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#1550b8" flood-opacity=".25"/>
+    </filter>
+  </defs>
+  <path d="M0 120 C60 90 110 150 170 120 C210 100 240 108 260 116 L260 200 L0 200 Z" fill="url(#vague)"/>
+  <path d="M0 150 C70 125 120 175 190 150 C225 138 245 142 260 146 L260 200 L0 200 Z" fill="#bcd6fb" opacity=".6"/>
+  <g transform="translate(70 22) rotate(-8)" filter="url(#ombre)">
+    <path d="M0 0 H88 L120 32 V150 H0 Z" fill="#ffffff"/>
+    <path d="M88 0 V32 H120 Z" fill="#dbe8fb"/>
+    <rect x="14" y="16" width="56" height="20" rx="6" fill="url(#bleu)"/>
+    <text x="42" y="31" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#ffffff">PDF</text>
+    <g fill="#d6deea"><rect x="14" y="48" width="92" height="6" rx="3"/><rect x="14" y="62" width="80" height="6" rx="3"/><rect x="14" y="76" width="88" height="6" rx="3"/><rect x="14" y="90" width="60" height="6" rx="3"/></g>
+    <path d="M16 126 C26 110 34 132 44 118 C52 108 56 128 66 120 C74 114 80 122 92 116" fill="none" stroke="#1d4ed8" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M14 136 H106" stroke="#cbd5e1" stroke-width="1.5"/>
+  </g>
+  <!-- stylo -->
+  <g transform="translate(176 92) rotate(38)">
+    <rect x="-7" y="-46" width="14" height="70" rx="6" fill="url(#bleu)"/>
+    <rect x="-7" y="-46" width="14" height="14" rx="5" fill="#0f3d91"/>
+    <path d="M-7 24 L0 40 L7 24 Z" fill="#f2c27b"/><path d="M-2 34 L0 40 L2 34 Z" fill="#334155"/>
+  </g>
+  <!-- étincelles -->
+  <g fill="#ffffff"><path d="M40 40 l3 8 l8 3 l-8 3 l-3 8 l-3 -8 l-8 -3 l8 -3 Z"/><path d="M220 30 l2 6 l6 2 l-6 2 l-2 6 l-2 -6 l-6 -2 l6 -2 Z"/></g>
+  <g fill="#93c5fd"><circle cx="30" cy="80" r="3"/><circle cx="236" cy="70" r="2.5"/></g>
+</svg>
