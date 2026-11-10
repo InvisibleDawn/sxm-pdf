@@ -1,5 +1,17 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-10 — Version 1.3.1 : la fenêtre ne se fermait plus
+
+- **Symptôme** (signalé par Invisible_Dawn) : le bouton X et « Fermer la fenêtre » depuis la barre des tâches
+  ne faisaient rien.
+- **Cause** : l'interface ferme la fenêtre avec `appWindow.destroy()` après avoir vérifié les documents
+  non enregistrés, mais l'autorisation Tauri `core:window:allow-destroy` n'était pas déclarée dans
+  `src-tauri/capabilities/default.json` : Tauri refusait sans message. Même cause pour Cmd+Q sur Mac.
+- **Correction** : autorisation ajoutée (une ligne). Nouveau test Rust `autorisations_fermeture_fenetre` (41/41).
+- **Vérifié dans l'application compilée** (Xvfb, vraie demande de fermeture WM_DELETE_WINDOW, comme le bouton X) :
+  avant = reste ouverte ; après = se ferme. Avec un document modifié : la question s'affiche,
+  « Annuler » garde la fenêtre, « Quitter sans enregistrer » ferme.
+
 ## 2026-11-10 — Design v3 (version 1.3.0)
 
 Nouvelle interface inspirée des maquettes « Linux USB Creator » et « SXM Multiboot » du projet.
