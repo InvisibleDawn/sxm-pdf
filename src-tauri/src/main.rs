@@ -22,6 +22,16 @@ mod tests {
     use super::*;
     use std::cell::Cell;
 
+    /// L'interface ferme la fenêtre avec `appWindow.destroy()` (bouton X, Cmd+Q, « Quitter sans enregistrer »).
+    /// Sans cette autorisation, Tauri refuse sans rien dire et la fenêtre ne se ferme plus.
+    #[test]
+    fn autorisations_fermeture_fenetre() {
+        let caps = include_str!("../capabilities/default.json");
+        let ui = include_str!("../../src/main.js");
+        assert!(ui.contains("appWindow.destroy()"));
+        assert!(caps.contains("\"core:window:allow-destroy\""), "autorisation core:window:allow-destroy manquante");
+    }
+
     fn dir(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("sxm-test-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);

@@ -17,7 +17,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - outils : `annots.js, sign.js, rh.js, watermark.js, capture.js, tooltip.js` ; données : `store.js`
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
-- natif : `src-tauri/src/` — `main.rs` (démarrage + 40 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
+- natif : `src-tauri/src/` — `main.rs` (démarrage + 41 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
   `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (9, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
@@ -54,6 +54,8 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 ## Design v3 (10/11) — version 1.3.0
 - Branche `design-v3` (à partir de v2) : barre latérale à libellés, accueil illustré (`public/illustrations/`),
   action `home`, styles dans le bloc « Design v3 » en fin de `style.css`. Release `v1.3.0-test` pour essai Windows 11 (DRH).
+- 1.3.1 : fermeture de la fenêtre réparée (autorisation `core:window:allow-destroy`, test Rust). Release `v1.3.1-test`.
+  Test de fermeture réelle : envoyer WM_DELETE_WINDOW (python-xlib) à l'app sous Xvfb.
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
 ## Reste à faire avant la vente
