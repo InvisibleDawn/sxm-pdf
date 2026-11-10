@@ -1,5 +1,19 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-10 — Version 1.3.2 : « Failed to parse PDF document … No PDF header found »
+
+- **Symptôme** (capture `fail1` de Invisible_Dawn) : erreur en voulant imprimer, enregistrer ou envoyer.
+- **Cause** (introduite en 1.2.0, lot E) : pour un document sans annotation, `buildFinal` renvoie directement
+  la copie du document gardée en mémoire (`t.bytes`) au lieu de la réécrire. L'impression (et l'export en
+  images) la donnait telle quelle à pdf.js, qui **transfère** les octets à son worker et vide donc le tableau.
+  Après une impression, `t.bytes` était vide : l'enregistrement et l'envoi échouaient, et l'impression suivante aussi.
+- **Correction** (`pdfsetup.js`) : le point d'accès unique à pdf.js donne toujours à pdf.js sa propre copie.
+  Plus aucun appel ne peut vider `t.bytes`. Les trois copies devenues inutiles (`tabs.js`, `save.js`,
+  `secure.js`) sont retirées pour ne pas doubler la mémoire.
+- **Tests** : nouveau test d'interface « imprimer puis envoyer et enregistrer » (échoue sans la correction,
+  passe avec) : interface 10/10, JS 12/12. Application compilée sous Xvfb : impression (boîte GTK) puis
+  annulation, ajout d'un texte, enregistrement → PDF valide contenant le texte.
+
 ## 2026-11-10 — Version 1.3.1 : la fenêtre ne se fermait plus
 
 - **Symptôme** (signalé par Invisible_Dawn) : le bouton X et « Fermer la fenêtre » depuis la barre des tâches

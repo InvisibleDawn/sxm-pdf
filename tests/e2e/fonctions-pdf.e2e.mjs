@@ -312,3 +312,31 @@ test("bouton Accueil : affiche l'accueil sans fermer les documents, puis retour 
   await closeAll();
   assert.equal(await visible(), true);
 });
+
+test("imprimer puis envoyer et enregistrer : le document reste intact (« No PDF header found »)", async () => {
+  const path = await openInApp("impression.pdf", await makePdf(["Page A", "Page B"]));
+  // Impression d'un document sans annotation (window.print remplacé : pas de boîte d'impression ici)
+  const after = await page.evaluate(async () => {
+    window.print = () => {};
+    await (await import("/src/save.js")).printDoc();
+    const t = (await import("/src/core.js")).state.tabs.at(-1);
+    return t.bytes.length;
+  });
+  assert.ok(after > 100, "après impression, la copie du document en mémoire ne doit pas être vidée");
+  // Envoi par mail : le fichier joint doit être un vrai PDF
+  await page.evaluate(async () => (await import("/src/save.js")).sendDoc());
+  const joint = Buffer.from(await page.evaluate(() => [...window.__fs.get("/tmp/sxm-pdf/envoi/impression.pdf")]));
+  assert.equal(joint.subarray(0, 5).toString(), "%PDF-");
+  assert.deepEqual((await pageTexts(joint)).map((p) => p.text), ["Page A", "Page B"]);
+  // Enregistrement avec une annotation ajoutée après l'impression
+  await page.evaluate(async () => {
+    const t = (await import("/src/core.js")).state.tabs.at(-1);
+    (await import("/src/editor.js")).pushUndo(t);
+    t.annots.push({ id: "n1", page: 0, type: "text", x: 80, y: 120, w: 200, h: 30, text: "Après impression", color: "#d11", size: 14 });
+    (await import("/src/tabs.js")).markDirty(t);
+  });
+  const saved = await saveActive(path);
+  assert.equal(saved.subarray(0, 5).toString(), "%PDF-");
+  assert.equal((await PDFDocument.load(saved)).getPageCount(), 2);
+  await closeAll();
+});

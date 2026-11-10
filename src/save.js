@@ -44,7 +44,7 @@ export async function buildFinal(t) {
  * Le texte caché n'existe donc plus dans le fichier (ni copiable, ni cherchable).
  */
 export async function applyRedactions(bytes, redacts) {
-  const doc = await pdfjsLib.getDocument({ data: bytes.slice(), cMapUrl: "/cmaps/", cMapPacked: true, standardFontDataUrl: "/standard_fonts/" }).promise;
+  const doc = await pdfjsLib.getDocument({ data: bytes, cMapUrl: "/cmaps/", cMapPacked: true, standardFontDataUrl: "/standard_fonts/" }).promise;
   const pdf = await PDFDocument.load(bytes);
   const pages = [...new Set(redacts.map((a) => a.page))].sort((x, y) => x - y);
   for (const i of pages) {

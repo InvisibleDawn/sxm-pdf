@@ -113,7 +113,7 @@ export async function loadBytes(t, bytes) {
   t.bytes = bytes;
   const old = t.pdfDoc;
   const doc = await pdfjsLib.getDocument({
-    data: bytes.slice(), cMapUrl: "/cmaps/", cMapPacked: true, standardFontDataUrl: "/standard_fonts/",
+    data: bytes, cMapUrl: "/cmaps/", cMapPacked: true, standardFontDataUrl: "/standard_fonts/",
   }).promise;
   t.pdfDoc = doc;
   t.linkService.setDocument(doc);
