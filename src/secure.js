@@ -71,7 +71,7 @@ export async function doBatch() {
         let pdf;
         try { pdf = await PDFDocument.load(bytes); }
         catch (e) { throw new Error(/encrypt/i.test(String(e)) ? "protégé par mot de passe, ignoré" : "PDF illisible"); }
-        const js = await pdfjsLib.getDocument({ data: bytes.slice(), ...PDFJS_OPTS }).promise;
+        const js = await pdfjsLib.getDocument({ data: bytes, ...PDFJS_OPTS }).promise;
         const vps = new Map();
         const getVp = async (i) => {
           if (!vps.has(i)) vps.set(i, (await js.getPage(i + 1)).getViewport({ scale: 1 }));

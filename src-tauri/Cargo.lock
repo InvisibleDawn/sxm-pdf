@@ -3874,7 +3874,7 @@ dependencies = [
 
 [[package]]
 name = "sxm-pdf"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "ashpd",
  "getrandom 0.3.4",
