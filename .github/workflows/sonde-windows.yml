@@ -21,25 +21,10 @@ jobs:
       - run: npm ci
       - name: Application (debug)
         run: npx tauri build --debug --no-bundle
-      - name: tauri-driver + msedgedriver (même version que WebView2)
+      - name: Sonde (application réelle, WebView2)
         shell: pwsh
         run: |
-          cargo install tauri-driver --locked
           $v = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}').pv
           Write-Host "WebView2 : $v"
-          Invoke-WebRequest "https://msedgedriver.microsoft.com/$v/edgedriver_win64.zip" -OutFile edgedriver.zip
-          Expand-Archive edgedriver.zip -DestinationPath edgedriver
-      - name: Sonde
-        shell: pwsh
-        run: |
-          npm i --no-save selenium-webdriver@4
           node tests/windows/fabrique-pdf.mjs "$env:RUNNER_TEMP\pdf"
-          Start-Process tauri-driver -ArgumentList "--native-driver","$pwd\edgedriver\msedgedriver.exe" -RedirectStandardOutput driver.txt -RedirectStandardError driver-err.txt
-          Start-Sleep 5
-          node tests/windows/sonde-selection.mjs "$pwd\src-tauri\target\debug\sxm-pdf.exe" "$env:RUNNER_TEMP\pdf\texte.pdf" "$env:RUNNER_TEMP\pdf\scan.pdf" sonde
-          Copy-Item driver*.txt sonde/ -ErrorAction SilentlyContinue
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: sonde-windows
-          path: sonde/
+          node tests/windows/sonde-selection.mjs "$pwd\src-tauri\target\debug\sxm-pdf.exe" "$env:RUNNER_TEMP\pdf\texte.pdf" "$env:RUNNER_TEMP\pdf\scan.pdf"
