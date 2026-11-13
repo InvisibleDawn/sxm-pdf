@@ -4,6 +4,8 @@ name: Sonde Windows (sélection)
 
 on:
   workflow_dispatch:
+  push:
+    branches: [sonde-windows]   # lancement : git push origin HEAD:sonde-windows
 
 jobs:
   sonde:
