@@ -1,5 +1,15 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-13 — Sonde Windows : sélection testée dans la vraie application
+
+- Nouveau workflow « Sonde Windows (sélection) » (`.github/workflows/sonde-windows.yml`, lancé par
+  `git push -f origin HEAD:sonde-windows`) : compile l'application (debug) sous Windows, l'ouvre avec le port de
+  débogage WebView2 (copie de test seulement), la pilote avec Playwright (CDP) et glisse aussi avec la **vraie
+  souris Windows** (SendInput). Résultats dans le journal (les artefacts ne sont pas téléchargeables d'ici).
+- Résultat (WebView2 156, Windows Server 2025) : PDF texte → sélection OK (souris simulée, vraie souris, double-clic),
+  menu Copier/Surligner affiché ; PDF scanné → message « Cette page est une image… ». Problème de Invisible_Dawn non
+  reproduit : précisions demandées (PDF scanné ? mise à l'échelle Windows ? écran tactile / stylet ?).
+
 ## 2026-11-13 — Version 1.3.3 : « Failed to fetch » à l'impression, 9 couleurs de surligneur
 
 - **« Failed to fetch » sous Windows** (après filigrane + paraphe + texte + surlignage, à l'impression) :

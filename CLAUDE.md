@@ -60,6 +60,8 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - 1.3.3 : images data: décodées sans fetch() (CSP + WebView2 → « Failed to fetch »), tests d'interface sous la CSP
   de production, 9 couleurs de surligneur, barre latérale en icônes si document ouvert et écran < 1400 px. Release `v1.3.3-test`.
   Sonde Chromium + CSP : `node .shots/probe.mjs` (DSF=1.25 pour simuler l'affichage Windows à 125 %).
+- Sonde Windows (vraie app, WebView2, vraie souris) : `git push -f origin HEAD:sonde-windows`, lire le journal du
+  workflow « Sonde Windows (sélection) ». 13/11 : sélection OK sur PDF texte, message sur PDF scanné.
   Test de fermeture réelle : envoyer WM_DELETE_WINDOW (python-xlib) à l'app sous Xvfb.
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
