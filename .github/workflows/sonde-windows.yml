@@ -19,8 +19,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with: { workspaces: src-tauri }
       - run: npm ci
-      - name: Application (debug)
-        run: npx tauri build --debug --no-bundle
+      - name: Application (debug, port de débogage WebView2 ouvert — copie de test seulement)
+        run: |
+          node -e "const f='src-tauri/tauri.conf.json',fs=require('fs'),c=JSON.parse(fs.readFileSync(f));c.app.windows[0].additionalBrowserArgs='--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port=9222';fs.writeFileSync(f,JSON.stringify(c,null,2))"
+          npx tauri build --debug --no-bundle
       - name: Sonde (application réelle, WebView2)
         shell: pwsh
         run: |

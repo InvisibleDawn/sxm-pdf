@@ -30,7 +30,7 @@ async function session(pdf, label, port) {
   const proc = spawn(app, [pdf], { env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}` }, stdio: "inherit" });
   let browser;
   for (let i = 0; i < 60 && !browser; i++) { try { browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`); } catch { await sleep(1000); } }
-  if (!browser) { log("ÉCHEC : impossible de se connecter à WebView2"); proc.kill(); return; }
+  if (!browser) { log("ÉCHEC : impossible de se connecter à WebView2 ; application", proc.exitCode === null ? "toujours lancée" : "arrêtée (code " + proc.exitCode + ")"); proc.kill(); return; }
   let page;
   for (let i = 0; i < 30 && !page; i++) { page = browser.contexts().flatMap((c) => c.pages()).find((p) => !p.url().startsWith("devtools")); if (!page) await sleep(500); }
   page.on("console", (m) => { if (["error", "warning"].includes(m.type())) log("console", m.type(), m.text().slice(0, 300)); });
@@ -87,5 +87,5 @@ async function session(pdf, label, port) {
 }
 
 await session(pdfText, "pdf-texte", 9222);
-await session(pdfScan, "pdf-scanne", 9223);
+await session(pdfScan, "pdf-scanne", 9222);
 process.exit(0);
