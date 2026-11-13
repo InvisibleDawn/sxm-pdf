@@ -119,6 +119,17 @@ before(async () => {
   browser = await chromium.launch({ executablePath: CHROME, args: ["--no-sandbox"] });
   page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   page.on("pageerror", (e) => console.error("Erreur dans la page :", e.message));
+  // Même politique de sécurité (CSP) que l'application installée : sous Windows, WebView2 l'applique
+  // strictement (ex. fetch() d'une image data: refusé → « Failed to fetch »). Seul ajout : le serveur
+  // de développement Vite (ws/http localhost), absent de l'application installée.
+  const csp = JSON.parse(fs.readFileSync(new URL("../../src-tauri/tauri.conf.json", import.meta.url), "utf8")).app.security.csp
+    .replace("connect-src 'self'", "connect-src 'self' ws://localhost:* http://localhost:*");
+  await page.route("**/*", async (route) => {
+    const r = await route.fetch();
+    const headers = r.headers();
+    if ((headers["content-type"] || "").includes("text/html")) headers["content-security-policy"] = csp;
+    await route.fulfill({ response: r, headers });
+  });
   await page.addInitScript(FAKE_TAURI);
   await page.goto(url);
   await page.waitForFunction(() => document.querySelector("#ribbon"));
@@ -338,5 +349,39 @@ test("imprimer puis envoyer et enregistrer : le document reste intact (« No PDF
   const saved = await saveActive(path);
   assert.equal(saved.subarray(0, 5).toString(), "%PDF-");
   assert.equal((await PDFDocument.load(saved)).getPageCount(), 2);
+  await closeAll();
+});
+
+test("paraphe + filigrane + texte + surlignage : impression, envoi et enregistrement (« Failed to fetch »)", async () => {
+  const path = await openInApp("paraphe.pdf", await makePdf(["Page A", "Page B"]));
+  const res = await page.evaluate(async () => {
+    const t = (await import("/src/core.js")).state.tabs.at(-1);
+    const { restructure } = await import("/src/pages.js");
+    const { drawWatermark, WM_DEFAULT } = await import("/src/watermark.js");
+    await restructure(t, (pdf) => drawWatermark(pdf, { ...WM_DEFAULT, layer: "back" }, null));
+    // Initiales (image data:, comme le paraphe de l'application) sur les deux pages, un texte, un surlignage
+    const c = document.createElement("canvas"); c.width = 80; c.height = 40;
+    const g = c.getContext("2d"); g.font = "24px sans-serif"; g.fillText("LH", 10, 30);
+    const src = c.toDataURL("image/png");
+    (await import("/src/editor.js")).pushUndo(t);
+    for (const p of [0, 1]) t.annots.push({ id: "p" + p, page: p, type: "signature", kind: "paraphe", src, ratio: 2, x1: 480, y1: 40, x2: 540, y2: 70 });
+    t.annots.push({ id: "t1", page: 0, type: "text", color: "#d92d20", x: 100, y: 600, size: 14, text: "Lu et approuvé" });
+    t.annots.push({ id: "h1", page: 0, type: "highlight", color: "#a3e635", rects: [[70, 70, 160, 90]] });
+    (await import("/src/tabs.js")).markDirty(t);
+    window.print = () => {};
+    document.getElementById("toasts").replaceChildren();
+    try { await (await import("/src/save.js")).printDoc(); } catch (e) { return "impression : " + (e.message || e); }
+    const err = document.querySelector(".toast.error, .toast.err")?.textContent;
+    return err ? "message d'erreur : " + err : "ok";
+  });
+  assert.equal(res, "ok");
+  await page.evaluate(async () => (await import("/src/save.js")).sendDoc());
+  const joint = Buffer.from(await page.evaluate(() => [...window.__fs.get("/tmp/sxm-pdf/envoi/paraphe.pdf")]));
+  const doc = await PDFDocument.load(joint);
+  assert.equal(doc.getPageCount(), 2);
+  const saved = await saveActive(path);
+  const images = (await PDFDocument.load(saved)).context.enumerateIndirectObjects()
+    .filter(([, o]) => o.dict?.get(PDFName.of("Subtype")) === PDFName.of("Image")).length;
+  assert.ok(images >= 1, "les initiales doivent être écrites dans le fichier");
   await closeAll();
 });

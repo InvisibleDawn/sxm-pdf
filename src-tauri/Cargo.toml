@@ -1,6 +1,6 @@
 [package]
 name = "sxm-pdf"
-version = "1.3.2"
+version = "1.3.3"
 description = "SXM PDF - lecteur, annotation, signature, conversion et capture"
 authors = ["Laurent Honoré"]
 edition = "2021"

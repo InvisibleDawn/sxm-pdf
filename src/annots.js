@@ -205,9 +205,20 @@ function safe(font, text) {
   return out;
 }
 
-async function dataUrlBytes(src) {
-  const r = await fetch(src);
-  return new Uint8Array(await r.arrayBuffer());
+/**
+ * Octets d'une image « data: » (signature, paraphe, tampon importé), décodés ici même.
+ * Pas de fetch() : la politique de sécurité de la fenêtre (connect-src) l'interdit pour les
+ * adresses data:, et WebView2 (Windows) l'applique strictement → « Failed to fetch » à
+ * l'impression / l'enregistrement d'un document paraphé ou signé.
+ */
+export function dataUrlBytes(src) {
+  const m = /^data:[^,]*?(;base64)?,(.*)$/s.exec(src);
+  if (!m) throw new Error("Image de signature illisible.");
+  if (!m[1]) return new TextEncoder().encode(decodeURIComponent(m[2]));
+  const bin = atob(m[2]);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 /**
@@ -291,7 +302,7 @@ export async function writeAnnots(pdf, annots, getViewport) {
       case "image": case "signature": {
         let img = images.get(a.src);
         if (!img) {
-          const bytes = await dataUrlBytes(a.src);
+          const bytes = dataUrlBytes(a.src);
           img = a.src.startsWith("data:image/jp") ? await pdf.embedJpg(bytes) : await pdf.embedPng(bytes);
           images.set(a.src, img);
         }
