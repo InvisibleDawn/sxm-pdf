@@ -406,3 +406,14 @@ body.at-home #sidebar { display: none; }
 .home-card .ic { grid-row: span 2; }
 .home-card .chip { grid-column: 2; justify-self: start; }
 @media (max-width: 1180px) { .home-card .chip { display: inline-block; } }
+/* 9 couleurs de surligneur (1.3.3) : pastilles plus serrées pour que le ruban Annoter tienne sur une ligne */
+#hlcolors { gap: 3px; margin: 0 4px; }
+.rib-panel .hl-sw { width: 18px; height: 18px; }
+/* Document ouvert sur un écran < 1400 px : barre latérale réduite aux icônes (libellés en info-bulle),
+   pour laisser la place au ruban et à la page. L'accueil garde la barre complète. */
+@media (max-width: 1400px) {
+  body:not(.at-home) #rail { width: 66px; padding: 14px 10px; align-items: center; }
+  body:not(.at-home) #rail .rail-btn, body:not(.at-home) #rail .rail-btn.small { justify-content: center; padding: 0; }
+  body:not(.at-home) #rail .rail-btn span, body:not(.at-home) .side-brand div, body:not(.at-home) .side-card { display: none; }
+  body:not(.at-home) .side-brand { padding: 0 0 12px; }
+}

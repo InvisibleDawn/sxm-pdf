@@ -1,5 +1,23 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-13 — Version 1.3.3 : « Failed to fetch » à l'impression, 9 couleurs de surligneur
+
+- **« Failed to fetch » sous Windows** (après filigrane + paraphe + texte + surlignage, à l'impression) :
+  - cause : les initiales / signatures sont des images `data:` que `writeAnnots` relisait avec `fetch()`.
+    La politique de sécurité de la fenêtre (CSP, `connect-src`, ajoutée le 07/11) interdit cette lecture ;
+    WebView2 (Windows) l'applique strictement, WebKit (Mac/Linux) non. Touchait aussi l'enregistrement et l'envoi
+    de tout document signé ou paraphé sous Windows ;
+  - correction : `dataUrlBytes` décode l'image directement (base64), sans `fetch()` (`annots.js`) ;
+  - tests : les tests d'interface tournent désormais **sous la CSP de l'application installée** (lue dans
+    `tauri.conf.json`). Sans la correction, le test existant « signature » et le nouveau test « paraphe + filigrane
+    + texte + surlignage : impression, envoi, enregistrement » échouent (« Failed to fetch ») ; avec : 11/11.
+- **Surligneur : 9 couleurs** — jaune, vert clair, vert, orange, rouge, rose, violet, bleu ciel, bleu
+  (les 5 couleurs existantes sont conservées). Pastilles un peu plus serrées.
+- **Document ouvert sur un écran de moins de 1400 px** : la barre latérale passe en icônes seules (libellés en
+  info-bulle) pour que le ruban Annoter tienne sur une ligne ; l'accueil garde la barre complète.
+- **Sélection sous Windows** : non reproduite dans Chromium (moteur de WebView2), ni à 100/125/150 %, ni après
+  un filigrane devant/derrière — précisions demandées à Invisible_Dawn.
+
 ## 2026-11-10 — Version 1.3.2 : « Failed to parse PDF document … No PDF header found »
 
 - **Symptôme** (capture `fail1` de Invisible_Dawn) : erreur en voulant imprimer, enregistrer ou envoyer.

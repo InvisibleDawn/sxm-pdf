@@ -18,7 +18,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
 - natif : `src-tauri/src/` — `main.rs` (démarrage + 41 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
-  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (10, Chrome sans écran)
+  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (11, sous la CSP de production, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
   (Linux : `$XDG_RUNTIME_DIR/sxm-pdf`), nettoyés au démarrage ; noms de temporaires aléatoires (`create_new`).
@@ -57,6 +57,9 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - 1.3.1 : fermeture de la fenêtre réparée (autorisation `core:window:allow-destroy`, test Rust). Release `v1.3.1-test`.
 - 1.3.2 : pdf.js reçoit toujours sa propre copie (`pdfsetup.js`) — sinon `t.bytes` était vidé après impression
   (« No PDF header found » à l'enregistrement / envoi). Release `v1.3.2-test`.
+- 1.3.3 : images data: décodées sans fetch() (CSP + WebView2 → « Failed to fetch »), tests d'interface sous la CSP
+  de production, 9 couleurs de surligneur, barre latérale en icônes si document ouvert et écran < 1400 px. Release `v1.3.3-test`.
+  Sonde Chromium + CSP : `node .shots/probe.mjs` (DSF=1.25 pour simuler l'affichage Windows à 125 %).
   Test de fermeture réelle : envoyer WM_DELETE_WINDOW (python-xlib) à l'app sous Xvfb.
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
