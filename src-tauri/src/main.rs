@@ -1187,6 +1187,75 @@ fn set_default_pdf() -> Result<(), String> {
     }
 }
 
+// ======================================================================= Mises à jour automatiques
+// Les mises à jour sont signées (clé privée dans les secrets GitHub) : l'application refuse
+// tout fichier dont la signature ne correspond pas à la clé publique de tauri.conf.json.
+const UPDATE_STABLE: &str = "https://github.com/InvisibleDawn/sxm-pdf/releases/latest/download/latest.json";
+const UPDATE_BETA: &str = "https://github.com/InvisibleDawn/sxm-pdf/releases/download/canal-beta/beta.json";
+
+fn updater_for(app: &tauri::AppHandle, beta: bool) -> Result<tauri_plugin_updater::Updater, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let url = tauri::Url::parse(if beta { UPDATE_BETA } else { UPDATE_STABLE }).map_err(|e| e.to_string())?;
+    app.updater_builder()
+        .endpoints(vec![url])
+        .map_err(|e| e.to_string())?
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    current: String,
+    notes: String,
+}
+
+/// Cherche une nouvelle version (canal stable ou bêta). Rien en mode développement.
+#[tauri::command]
+async fn update_check(app: tauri::AppHandle, beta: bool) -> Result<Option<UpdateInfo>, String> {
+    if cfg!(debug_assertions) {
+        return Ok(None);
+    }
+    let found = updater_for(&app, beta)?
+        .check()
+        .await
+        .map_err(|e| format!("Vérification impossible : {e}"))?;
+    Ok(found.map(|u| UpdateInfo {
+        version: u.version.clone(),
+        current: u.current_version.clone(),
+        notes: u.body.clone().unwrap_or_default(),
+    }))
+}
+
+/// Télécharge, vérifie la signature, installe puis relance l'application.
+/// Sous Windows, l'installateur ferme lui-même l'application et la relance.
+#[tauri::command]
+async fn update_install(
+    app: tauri::AppHandle,
+    beta: bool,
+    progress: tauri::ipc::Channel<(u64, u64)>,
+) -> Result<(), String> {
+    let Some(update) = updater_for(&app, beta)?
+        .check()
+        .await
+        .map_err(|e| format!("Vérification impossible : {e}"))?
+    else {
+        return Err("Aucune mise à jour disponible.".into());
+    };
+    let mut done: u64 = 0;
+    update
+        .download_and_install(
+            |chunk, total| {
+                done += chunk as u64;
+                let _ = progress.send((done, total.unwrap_or(0)));
+            },
+            || {},
+        )
+        .await
+        .map_err(|e| format!("Installation impossible : {e}"))?;
+    app.restart();
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -1200,6 +1269,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             startup_args,
             read_bytes,
@@ -1220,7 +1290,9 @@ fn main() {
             data_read_backup,
             data_quarantine,
             check_tools,
-            temp_path
+            temp_path,
+            update_check,
+            update_install
         ])
         .run(tauri::generate_context!())
         .expect("Erreur au démarrage de SXM PDF");

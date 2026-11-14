@@ -1,5 +1,22 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-14 — Mises à jour automatiques
+
+- Au démarrage (après 5 s, discrètement), SXM PDF vérifie s'il existe une nouvelle version et propose
+  « Installer maintenant / Plus tard / Ignorer cette version », avec les nouveautés. Barre de progression,
+  puis redémarrage automatique. Avertit si des documents ne sont pas enregistrés.
+- Menu ⋯ > « Rechercher les mises à jour… » ; dans « À propos » : version réelle affichée, cases
+  « Rechercher automatiquement au démarrage » et « Recevoir aussi les versions de test (bêta) ».
+- Sécurité : mises à jour signées (plugin Tauri updater, clé publique dans `tauri.conf.json`,
+  clé privée dans les secrets GitHub `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`).
+  Un fichier non signé par cette clé est refusé.
+- Windows et macOS uniquement ; sous Linux, l'app renvoie vers la page de téléchargement (.rpm/.deb).
+- GitHub Actions : sur un tag `vX.Y.Z`, la version de l'app prend celle du tag, les fichiers signés sont
+  produits et le job « publier » crée la page Releases + `latest.json` (nouveautés = 1re section de ce
+  journal). Tag sans tiret = stable (tout le monde) ; avec tiret (`v1.4.0-beta.1`) = bêta seulement
+  (fichier `beta.json` de la release technique `canal-beta`). Pas de .msi pour les versions bêta (WiX).
+- Tests Rust 19/19 (Linux).
+
 ## 2026-11-07 — Surligner sur les documents scannés
 
 - Sur une page scannée (image, sans texte), Sélectionner et Surligner ne faisaient rien, sans

@@ -5,6 +5,8 @@ import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
 import * as io from "./io.js";
 import { invoke } from "@tauri-apps/api/core";
 import { $ } from "./core.js";
+import { getVersion } from "@tauri-apps/api/app";
+import { checkNow, settingsBlock } from "./update.js";
 
 // ======================================================================= Épingler l'application
 
@@ -125,13 +127,17 @@ export async function setDefault() {
   catch (e) { toast(String(e), true); }
 }
 
-export function about() {
+export async function about() {
+  let version = "";
+  try { version = await getVersion(); } catch {}
   modal((m, close) => m.append(
-    el("h2", {}, "SXM PDF 1.0"),
+    el("h2", {}, `SXM PDF ${version}`),
     el("p", {}, "Lire, annoter, signer, convertir et capturer."),
     el("p", {}, "© 2026 Invisible_Dawn."),
     el("p", {}, "Composants libres : PDF.js et pdf-lib (Apache 2.0 / MIT), Tauri (MIT/Apache 2.0). Les conversions Office utilisent LibreOffice, distribué sous licence MPL 2.0 (www.libreoffice.org). Le chiffrement utilise qpdf (Apache 2.0). Police des filigranes : DejaVu Sans 2.37 (licences Bitstream Vera et Arev, redistribution autorisée)."),
+    settingsBlock(),
     el("div", { class: "row end" },
+      el("button", { class: "btn", onclick: () => { close(); checkNow(); } }, "Rechercher les mises à jour"),
       el("button", { class: "btn", onclick: () => showLicense() }, "Licence de la police DejaVu"),
       el("button", { class: "btn accent", onclick: () => close() }, "Fermer"))));
 }

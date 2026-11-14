@@ -103,5 +103,16 @@
       "../THIRD-PARTY-NOTICES.md": "licenses/THIRD-PARTY-NOTICES.md",
       "../public/licenses/DejaVu-LICENSE.txt": "licenses/DejaVu-LICENSE.txt"
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ0NjlGREVGRjA1OUVFRjkKUldUNTdsbnc3LzFwUkZtU2hjQmVhWk83YWszbkJwLy9aQVRwZlkyejd1UGlqaStYVW01N2JSTVAK",
+      "endpoints": [
+        "https://github.com/InvisibleDawn/sxm-pdf/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }
