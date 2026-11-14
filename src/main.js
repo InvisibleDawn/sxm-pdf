@@ -20,6 +20,7 @@ import { printDoc, saveTab, sendDoc } from "./save.js";
 import { doBatch, doParaphe, doSearchRedact, doWatermark, protectDialog, unprotect } from "./secure.js";
 import { activate, closeTab, openPaths } from "./tabs.js";
 import { version as APP_VERSION } from "../package.json";
+import { autoCheck, checkNow } from "./update.js";
 
 const ACTIONS = {
   open: async () => openPaths(io.toArray(await io.pickPdf(true))),
@@ -40,6 +41,7 @@ const ACTIONS = {
   theme: () => applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"),
   "default-pdf": setDefault, about,
   home: () => activate(null), // retour à l'accueil, les documents restent ouverts dans leurs onglets
+  "default-pdf": setDefault, about, updates: checkNow,
 };
 
 document.addEventListener("click", (e) => {
@@ -191,6 +193,7 @@ createIcons({ icons: ICONS, attrs: { "stroke-width": 1.8 } });
 initTooltips();
 initTheme();
 firstRunWelcome();
+autoCheck();
 setTool("select");
 { const v = document.querySelector("#app-version"); if (v) v.textContent = "v" + APP_VERSION; }
 activate(null);

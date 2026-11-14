@@ -32,7 +32,12 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Fedora : `npm install && npx tauri build --bundles rpm`
 - GitHub Actions : workflow « Compiler SXM PDF » (tests 3 OS + Fedora 45 en conteneur, puis installateurs ; Mac = macos-15-intel,
   les Mac arm64 de GitHub sont souvent indisponibles) ; « Publier les installateurs » crée une page Releases.
-- Version de test publiée : release `v1.0.3-test` (dmg, exe, msi, rpm, deb).
+- Publier une version : pousser un tag `vX.Y.Z` (stable) ou `vX.Y.Z-beta.N` (bêta) → compilation,
+  page Releases et fichier de mise à jour automatiques. Penser à écrire la section du CHANGELOG avant.
+- Mises à jour auto : `src/update.js` + commandes Rust `update_check` / `update_install`. Clé privée de
+  signature : secrets GitHub (sauvegarde chez Invisible_Dawn) — la perdre = plus de mises à jour possibles.
+- Versions : tag `vX.Y.Z` → compilation + page Releases + `latest.json` (mises à jour auto) en un seul workflow.
+  Branche de travail unique : `main` (1.4.0 = 1.3.3 de `design-v3` + mises à jour auto, 16/11).
 
 ## État au 2026-11-06
 - Tests de sauvegarde 19/19 sur Windows Server 2025, macOS 15.7 (Intel), Ubuntu 22.04.
@@ -69,5 +74,5 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
 2. Signature des installateurs (certificat Windows, compte développeur Apple 99 $/an).
-3. Licence + paiement (19,99 €/an ou 59,99 € à vie, essai 14 jours) et mises à jour automatiques.
+3. Licence + paiement (19,99 €/an ou 59,99 € à vie, essai 14 jours). Mises à jour automatiques : faites (14/11).
 4. Version 2 : OCR (Tesseract local), aussi pour le masquage par recherche sur les scans.

@@ -1,5 +1,29 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-16 — Version 1.4.0 : mises à jour automatiques
+
+- **Mises à jour automatiques (Windows et Mac)** : au démarrage, SXM PDF vérifie discrètement s'il existe une
+  nouvelle version et propose « Installer maintenant / Plus tard / Ignorer cette version », avec la liste des
+  nouveautés. Barre de progression, puis redémarrage automatique. Prévient avant si des documents ne sont pas
+  enregistrés.
+- Menu ⋯ > « Rechercher les mises à jour… ». Dans « À propos » : version réelle, recherche automatique au
+  démarrage, case « Recevoir aussi les versions de test (bêta) ».
+- Mises à jour signées : un fichier qui ne porte pas la signature de SXM PDF est refusé.
+- Linux : pas de mise à jour automatique, l'app renvoie vers la page de téléchargement (.rpm / .deb).
+- Nom public : © 2026 Invisible_Dawn (À propos, copyright des installateurs).
+- Contient toutes les corrections jusqu'à la 1.3.3 (impression sous Windows, 9 couleurs de surligneur, etc.).
+- Cette version s'installe à la main une dernière fois ; les suivantes arrivent toutes seules.
+
+## 2026-11-14 — Mises à jour automatiques (détails techniques)
+
+- Plugin Tauri updater, clé publique dans `tauri.conf.json`, clé privée dans les secrets GitHub
+  `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- GitHub Actions : sur un tag `vX.Y.Z`, la version de l'app prend celle du tag, les fichiers signés sont produits
+  et le job « publier » crée la page Releases + `latest.json` (nouveautés = 1re section de ce journal).
+  Tag sans tiret = stable ; avec tiret (`v1.4.0-beta.1`) = bêta seulement (`beta.json` de la release `canal-beta`).
+  Pas de .msi pour les versions bêta (WiX).
+- 16/11 : intégré à la branche de la 1.3.3 (la PR n° 1 partait d'une base trop ancienne).
+
 ## 2026-11-13 — Sonde Windows : sélection testée dans la vraie application
 
 - Nouveau workflow « Sonde Windows (sélection) » (`.github/workflows/sonde-windows.yml`, lancé par
