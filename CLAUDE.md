@@ -1,6 +1,7 @@
 # SXM PDF — fiche de reprise du projet
 
 Application PDF de bureau (Tauri 2 : interface JavaScript + Rust) de Invisible_Dawn.
+Nom public dans l'appli : **Invisible_Dawn** (À propos, copyright, métadonnées). Ne jamais afficher le vrai nom.
 Répondre en français. Dépôt privé : github.com/InvisibleDawn/sxm-pdf.
 
 ## Fonctions (toutes opérationnelles)
