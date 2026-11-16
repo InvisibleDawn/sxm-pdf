@@ -21,7 +21,7 @@ export function autoCheck() {
   setTimeout(async () => {
     try {
       const u = await invoke("update_check", { beta: betaEnabled() });
-      if (u && db.get("sxm.updates.skip") !== u.version) offer(u, true);
+      if (u && db.get("sxm.updates.skip") !== u.version) notify(u);
     } catch { /* hors ligne ou serveur indisponible : on réessaiera au prochain lancement */ }
   }, 5000);
 }
@@ -45,6 +45,32 @@ export async function checkNow() {
   } catch (e) {
     toast("Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet.\n" + String(e?.message || e), true);
   } finally { running = false; }
+}
+
+/**
+ * Avis discret de nouvelle version (vérification au démarrage) : petite carte en bas à droite,
+ * qui ne bloque rien. L'utilisateur choisit : Installer, Nouveautés, Plus tard (×) ou Ignorer cette version.
+ * Rien n'est téléchargé sans son clic.
+ */
+export function notify(u) {
+  document.querySelector(".update-card")?.remove();
+  const host = document.getElementById("toasts");
+  if (!host) return offer(u, true);
+  const card = el("div", { class: "toast update-card", role: "status" });
+  const close = () => card.remove();
+  const small = (label, fn, cls = "btn") => el("button", { class: cls, onclick: fn }, label);
+  card.append(
+    el("div", { class: "uc-head" },
+      el("b", {}, `🎉 SXM PDF ${u.version} est disponible`),
+      el("button", { class: "uc-x", title: "Plus tard", "aria-label": "Plus tard", onclick: close }, "×")),
+    el("div", { class: "uc-sub" }, `Vous utilisez la version ${u.current}.`),
+    el("div", { class: "uc-row" },
+      small("Installer", () => { close(); install(u); }, "btn accent"),
+      u.notes ? small("Nouveautés", () => { close(); offer(u, true); }) : null,
+      small("Plus tard", close)),
+    el("button", { class: "uc-skip", onclick: () => { db.set("sxm.updates.skip", u.version); close(); } }, "Ignorer cette version"));
+  host.prepend(card);
+  return card;
 }
 
 function offer(u, automatic) {

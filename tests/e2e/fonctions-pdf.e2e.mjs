@@ -385,3 +385,41 @@ test("paraphe + filigrane + texte + surlignage : impression, envoi et enregistre
   assert.ok(images >= 1, "les initiales doivent être écrites dans le fichier");
   await closeAll();
 });
+
+test("nouvelle version : avis discret (non bloquant), rien n'est installé sans clic", async () => {
+  const r = await page.evaluate(async () => {
+    const calls = [];
+    const real = window.__TAURI_INTERNALS__.invoke;
+    window.__TAURI_INTERNALS__.invoke = async (cmd, args, opts) => { calls.push(cmd); return real(cmd, args, opts); };
+    const up = await import("/src/update.js");
+    const db = await import("/src/store.js");
+    const u = { version: "9.9.9", current: "1.4.0", notes: "- Nouveauté de test" };
+    const out = {};
+    up.notify(u);
+    const card = document.querySelector("#toasts .update-card");
+    out.card = !!card;
+    out.modal = !!document.querySelector(".modal");
+    out.text = card?.textContent || "";
+    out.installedSansClic = calls.includes("update_install");
+    card.querySelector(".uc-x").click();                         // Plus tard (×)
+    out.ferme = !document.querySelector(".update-card");
+    up.notify(u); up.notify(u);                                   // jamais deux cartes
+    out.unique = document.querySelectorAll(".update-card").length;
+    document.querySelector(".update-card .uc-skip").click();     // Ignorer cette version
+    out.skip = db.get("sxm.updates.skip");
+    up.notify(u);
+    [...document.querySelectorAll(".update-card .btn")].find((b) => b.textContent === "Nouveautés").click();
+    out.nouveautes = document.querySelector(".modal")?.textContent.includes("Nouveauté de test");
+    window.__TAURI_INTERNALS__.invoke = real;
+    return out;
+  });
+  assert.equal(r.card, true, "la carte s'affiche");
+  assert.equal(r.modal, false, "aucune fenêtre bloquante");
+  assert.match(r.text, /9\.9\.9 est disponible/);
+  assert.equal(r.installedSansClic, false, "rien n'est installé sans clic");
+  assert.equal(r.ferme, true);
+  assert.equal(r.unique, 1);
+  assert.equal(r.skip, "9.9.9");
+  assert.equal(r.nouveautes, true);
+  await page.keyboard.press("Escape");
+});

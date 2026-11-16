@@ -1,5 +1,14 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-16 — Version 1.4.1 : avis de mise à jour discret
+
+- Quand une nouvelle version est disponible, SXM PDF affiche une **petite carte en bas à droite**, qui ne bloque
+  pas le travail (plus de fenêtre au milieu de l'écran). Au choix : **Installer**, **Nouveautés**, **Plus tard** (×)
+  ou **Ignorer cette version**. Rien n'est téléchargé ni installé sans votre clic.
+- « Rechercher les mises à jour… » (menu ⋯ ou À propos) affiche toujours la réponse en fenêtre, puisque c'est demandé.
+- Les notifications remontent légèrement pour ne plus cacher le zoom de la barre du bas.
+- Test d'interface ajouté (carte non bloquante, aucune installation sans clic, « Ignorer », « Nouveautés ») : 12/12.
+
 ## 2026-11-16 — Version 1.4.0 : mises à jour automatiques
 
 - **Mises à jour automatiques (Windows et Mac)** : au démarrage, SXM PDF vérifie discrètement s'il existe une

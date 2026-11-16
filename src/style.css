@@ -290,7 +290,7 @@ svg.lucide { width: 18px; height: 18px; stroke-width: 1.8; flex: none; }
 .cap-hint.pop { animation: cap-pop .25s ease-out; }
 @keyframes cap-pop { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
-#toasts { position: fixed; bottom: 16px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+#toasts { position: fixed; bottom: 40px; right: 16px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
 .toast { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 10px; box-shadow: var(--shadow); max-width: 420px; white-space: pre-wrap; }
 .toast.err { border-left-color: #dc2626; }
 .busy { position: fixed; inset: 0; z-index: 150; background: rgba(2,6,23,.35); display: flex; align-items: center; justify-content: center; }
@@ -417,3 +417,14 @@ body.at-home #sidebar { display: none; }
   body:not(.at-home) #rail .rail-btn span, body:not(.at-home) .side-brand div, body:not(.at-home) .side-card { display: none; }
   body:not(.at-home) .side-brand { padding: 0 0 12px; }
 }
+
+/* Avis de mise à jour : carte discrète en bas à droite, non bloquante (update.js → notify) */
+.toast.update-card { white-space: normal; width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; }
+.update-card .uc-head { display: flex; align-items: flex-start; gap: 8px; }
+.update-card .uc-head b { flex: 1; font-size: 13px; }
+.update-card .uc-x { border: 0; background: none; width: 22px; height: 22px; border-radius: 6px; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; padding: 0; }
+.update-card .uc-x:hover { background: var(--hover); color: var(--text); }
+.update-card .uc-sub { color: var(--muted); font-size: 12px; }
+.update-card .uc-row { display: flex; gap: 6px; margin-top: 2px; }
+.update-card .uc-row .btn { padding: 4px 10px; font-size: 12px; width: auto; }
+.update-card .uc-skip { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--muted); font-size: 11px; text-decoration: underline; cursor: pointer; width: auto; }
