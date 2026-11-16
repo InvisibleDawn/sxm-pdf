@@ -1,5 +1,10 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-16 — Version 1.5.2 : essai de la mise à jour intégrée
+
+- Version d'essai : elle sert à vérifier que la mise à jour depuis la 1.5.1 se fait en un clic (carte en bas à
+  droite → Installer → redémarrage). Aucun autre changement.
+
 ## 2026-11-16 — Version 1.5.1 : mises à jour Windows signées
 
 - Nouvelle clé de signature des mises à jour (l'ancienne a été perdue), sans mot de passe : un seul secret GitHub,
