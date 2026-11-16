@@ -18,7 +18,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - outils : `annots.js, sign.js, rh.js, watermark.js, capture.js, tooltip.js` ; données : `store.js`
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
-- natif : `src-tauri/src/` — `main.rs` (démarrage + 41 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
+- natif : `src-tauri/src/` — `main.rs` (démarrage + 42 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
   `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (16) ; interface : `npm run test:e2e` (12 + anglais, sous la CSP de production, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur

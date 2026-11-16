@@ -19,6 +19,14 @@ pub(crate) use system::*;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mise_a_jour_absente_n_est_pas_une_erreur() {
+        use tauri_plugin_updater::Error as E;
+        assert!(super::aucune_version_publiee(&E::ReleaseNotFound));
+        assert!(super::aucune_version_publiee(&E::TargetNotFound("windows-x86_64".into())));
+        assert!(super::aucune_version_publiee(&E::TargetsNotFound(vec!["windows-x86_64-nsis".into()])));
+        assert!(!super::aucune_version_publiee(&E::UnsupportedOs));
+    }
     use super::*;
     use std::cell::Cell;
 
@@ -756,16 +764,25 @@ struct UpdateInfo {
     notes: String,
 }
 
+/// Vrai si l'échec signifie seulement « pas de nouvelle version pour ce système »
+/// (fichier absent sur GitHub, ou sans entrée pour Windows / Mac / Linux).
+fn aucune_version_publiee(e: &tauri_plugin_updater::Error) -> bool {
+    use tauri_plugin_updater::Error as E;
+    matches!(e, E::ReleaseNotFound | E::TargetNotFound(_) | E::TargetsNotFound(_))
+}
+
 /// Cherche une nouvelle version (canal stable ou bêta). Rien en mode développement.
 #[tauri::command]
 async fn update_check(app: tauri::AppHandle, beta: bool) -> Result<Option<UpdateInfo>, String> {
     if cfg!(debug_assertions) {
         return Ok(None);
     }
-    let found = updater_for(&app, beta)?
-        .check()
-        .await
-        .map_err(|e| format!("Vérification impossible : {e}"))?;
+    let found = match updater_for(&app, beta)?.check().await {
+        Ok(f) => f,
+        // Aucun fichier de mise à jour publié, ou aucun pour ce système : rien à proposer (pas une panne).
+        Err(e) if aucune_version_publiee(&e) => None,
+        Err(e) => return Err(format!("Vérification impossible : {e}")),
+    };
     Ok(found.map(|u| UpdateInfo {
         version: u.version.clone(),
         current: u.current_version.clone(),

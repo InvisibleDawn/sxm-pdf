@@ -1,5 +1,11 @@
 # Journal des modifications — SXM PDF
 
+## Version 1.5.1 (en préparation)
+
+- « Rechercher les mises à jour » n'affiche plus « Impossible de vérifier… Vérifiez votre connexion Internet » quand
+  aucune version n'est encore publiée pour votre système : la réponse est simplement « Vous avez la dernière
+  version ». Le message d'erreur reste réservé aux vrais problèmes de connexion.
+
 ## 2026-11-16 — Version 1.5.0 : interface en anglais, avis de mise à jour sous Fedora
 
 - **Interface en anglais** : SXM PDF s'affiche en français si l'ordinateur est en français, sinon en anglais.
