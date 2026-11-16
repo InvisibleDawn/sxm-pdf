@@ -74,7 +74,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
 ## 1.5.0 (16/11)
-- Compilations : **Windows + Fedora (.rpm) seulement** (≈ 25 min). « [mac] » / « [deb] » dans le message du commit
+- Compilations : **Windows + Fedora (.rpm) seulement** (≈ 25 min). « [avec-mac] » / « [avec-deb] » dans le message du commit
   publié pour les réactiver ponctuellement.
 - Interface en anglais : `src/i18n.js` + dictionnaire `src/i18n-en.js`. **Tout nouveau texte affiché en français
   doit être ajouté au dictionnaire** (sinon `tests/e2e/anglais.e2e.mjs` échoue s'il est visible dans le parcours).

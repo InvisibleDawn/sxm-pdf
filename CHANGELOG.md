@@ -19,7 +19,7 @@
   et les fenêtres principales) ; les tests d'interface existants forcent le français.
 - `latest.json` contient toujours une entrée `linux-x86_64` (lien vers le .rpm Fedora, signature factice : Linux
   ne fait que prévenir), même sans les secrets de signature.
-- Workflow : matrices calculées ; « [mac] » / « [deb] » dans le message du commit réactivent Mac / .deb.
+- Workflow : matrices calculées ; « [avec-mac] » / « [avec-deb] » dans le message du commit réactivent Mac / .deb.
 
 ## 2026-11-16 — Version 1.4.1 : avis de mise à jour discret
 
