@@ -1,6 +1,7 @@
 // Accès fichiers et commandes natives (Rust).
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { tr } from "./i18n.js";
 
 export const isLinux = navigator.userAgent.includes("Linux");
 export const isMac = /Macintosh|Mac OS X/.test(navigator.userAgent);
@@ -42,12 +43,12 @@ export const IMAGE_EXT = ["png", "jpg", "jpeg"];
 export const pickPdf = (multiple = true) =>
   open({ multiple, filters: [{ name: "PDF", extensions: ["pdf"] }] });
 export const pickOffice = () =>
-  open({ multiple: true, filters: [{ name: "Documents Office", extensions: OFFICE_EXT }] });
+  open({ multiple: true, filters: [{ name: tr("Documents Office"), extensions: OFFICE_EXT }] });
 export const pickImages = (multiple = true) =>
   open({ multiple, filters: [{ name: "Images", extensions: IMAGE_EXT }] });
 export const pickFolder = () => open({ directory: true });
 export const savePath = (defaultPath, name = "PDF", extensions = ["pdf"]) =>
-  save({ defaultPath, filters: [{ name, extensions }] });
+  save({ defaultPath, filters: [{ name: tr(name), extensions }] });
 
 export const officeConvert = (path, to = "pdf", infilter = null) =>
   invoke("office_convert", { path, to, infilter });

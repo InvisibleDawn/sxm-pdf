@@ -1,4 +1,6 @@
-# Compile SXM PDF pour Windows, macOS et Linux sur les serveurs de GitHub.
+# Compile SXM PDF sur les serveurs de GitHub.
+# Depuis le 16/11 : Windows + Fedora (.rpm) seulement (environ 25 min). Pour réactiver ponctuellement le Mac
+# ou le .deb, mettre « [mac] » et/ou « [deb] » dans le message du dernier commit envoyé.
 # Lancement : à chaque tag "v*" (ex. v1.0.0) ou manuellement (onglet Actions > Run workflow).
 name: Compiler SXM PDF
 
@@ -15,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         # macos-15-intel : les Mac Apple Silicon de GitHub sont souvent indisponibles (file d'attente)
-        os: [windows-latest, macos-15-intel, ubuntu-22.04, ubuntu-24.04]
+        os: ${{ fromJSON(contains(github.event.head_commit.message, '[mac]') && '["windows-latest","macos-15-intel","ubuntu-22.04","ubuntu-24.04"]' || '["windows-latest","ubuntu-22.04","ubuntu-24.04"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     steps:
@@ -75,6 +77,7 @@ jobs:
   # 1 ter) Mac Apple Silicon (arm64) : tests. Machines GitHub parfois indisponibles : ce test ne bloque
   # pas les installateurs, mais son résultat est visible dans la compilation.
   tests-mac-arm:
+    if: contains(github.event.head_commit.message, '[mac]')
     runs-on: macos-15
     timeout-minutes: 40
     steps:
@@ -93,6 +96,7 @@ jobs:
 
   # 1 quater) Debian 13 : tests, paquet .deb installé avec apt et lancé.
   debian:
+    if: contains(github.event.head_commit.message, '[deb]')
     runs-on: ubuntu-latest
     container: debian:13
     timeout-minutes: 60
@@ -161,19 +165,16 @@ jobs:
 
   # 2) Installateurs — seulement si les tests passent, au lancement manuel ou sur un tag de version.
   build:
-    needs: [audit, tests, fedora, debian]
+    needs: [audit, tests, fedora]
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/publier'
     timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            bundles: msi,nsis
-          - os: macos-15-intel
-            bundles: app,dmg   # « app » produit l'archive .app.tar.gz des mises à jour
-          - os: ubuntu-22.04
-            bundles: rpm,deb
+        # Windows toujours ; Mac avec « [mac] », .deb avec « [deb] » (le .rpm vient du job fedora).
+        include: ${{ fromJSON(format('[{{"os":"windows-latest","bundles":"msi,nsis"}}{0}{1}]',
+          contains(github.event.head_commit.message, '[mac]') && ',{"os":"macos-15-intel","bundles":"app,dmg"}' || '',
+          contains(github.event.head_commit.message, '[deb]') && ',{"os":"ubuntu-22.04","bundles":"deb"}' || '')) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -352,7 +353,12 @@ jobs:
           if (win) platforms["windows-x86_64"] = win;
           const mac = entry(pick(/\.app\.tar\.gz$/));
           if (mac) { platforms["darwin-x86_64"] = mac; platforms["darwin-aarch64"] = mac; }
-          if (!Object.keys(platforms).length) { console.log("Pas de fichiers signés : secrets TAURI_SIGNING_* absents ?"); process.exit(0); }
+          if (!Object.keys(platforms).length) console.log("Pas de fichiers signés : secrets TAURI_SIGNING_* absents ? (Windows/Mac sans mise à jour)");
+          // Linux (.rpm Fedora) : l'app prévient seulement et ouvre la page de téléchargement (pas d'installation
+          // par l'app), d'où une signature factice ; présent même sans les secrets.
+          const rpm = pick(/-fedora45\.rpm$/) || pick(/\.rpm$/);
+          if (rpm) platforms["linux-x86_64"] = { url: `${base}/${rpm}`, signature: "telechargement-manuel" };
+          if (!Object.keys(platforms).length) process.exit(0);
           const notes = fs.readFileSync("../notes.txt", "utf8").trim();
           fs.writeFileSync("latest.json", JSON.stringify({ version, notes, pub_date: new Date().toISOString(), platforms }, null, 2));
           console.log(fs.readFileSync("latest.json", "utf8"));

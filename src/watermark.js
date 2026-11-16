@@ -6,10 +6,11 @@ import { modal, el, toast, askText, confirmBox } from "./ui.js";
 
 const TPL_KEY = "sxm.watermarkTemplates";
 import * as db from "./store.js";
+import { tr } from "./i18n.js";
 const loadTpl = () => [...(db.get(TPL_KEY, []) || [])];
 const saveTpl = (v) => db.set(TPL_KEY, v);
 
-export const WM_PRESETS = ["CONFIDENTIEL", "COPIE", "BROUILLON", "NE PAS DIFFUSER", "DOCUMENT INTERNE"];
+export const WM_PRESETS = ["CONFIDENTIEL", "COPIE", "BROUILLON", "NE PAS DIFFUSER", "DOCUMENT INTERNE"].map(tr);
 export const WM_DEFAULT = { text: "CONFIDENTIEL", color: "#dc2626", opacity: 0.25, scale: 0.9, orient: "diagonal", layer: "back" };
 
 // Police Unicode (DejaVu Sans Bold) : accents, ç, œ, ß, grec, cyrillique…

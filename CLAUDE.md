@@ -19,7 +19,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
 - natif : `src-tauri/src/` — `main.rs` (démarrage + 41 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
-  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (12) ; interface : `npm run test:e2e` (11, sous la CSP de production, Chrome sans écran)
+  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (16) ; interface : `npm run test:e2e` (12 + anglais, sous la CSP de production, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
   (Linux : `$XDG_RUNTIME_DIR/sxm-pdf`), nettoyés au démarrage ; noms de temporaires aléatoires (`create_new`).
@@ -73,9 +73,13 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   Test de fermeture réelle : envoyer WM_DELETE_WINDOW (python-xlib) à l'app sous Xvfb.
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
-## Décidé le 16/11 (à faire à la prochaine session)
-- Compilations : **Windows + Fedora (.rpm) seulement** (Mac et .deb retirés du workflow, environ 25 min au lieu de 45).
-- Version anglaise de l'interface : n'existe pas encore (tout est en français) ; à ajouter.
+## 1.5.0 (16/11)
+- Compilations : **Windows + Fedora (.rpm) seulement** (≈ 25 min). « [mac] » / « [deb] » dans le message du commit
+  publié pour les réactiver ponctuellement.
+- Interface en anglais : `src/i18n.js` + dictionnaire `src/i18n-en.js`. **Tout nouveau texte affiché en français
+  doit être ajouté au dictionnaire** (sinon `tests/e2e/anglais.e2e.mjs` échoue s'il est visible dans le parcours).
+- Mises à jour : carte discrète en bas à droite (`notify`), jamais d'installation sans clic ; Linux : « Télécharger »
+  ouvre la page de la version.
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).

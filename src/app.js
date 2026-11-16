@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { $ } from "./core.js";
 import { getVersion } from "@tauri-apps/api/app";
 import { checkNow, settingsBlock } from "./update.js";
+import { langSetting, setLangSetting, tr } from "./i18n.js";
 
 // ======================================================================= Épingler l'application
 
@@ -108,7 +109,7 @@ export async function exportData() {
 }
 
 export async function importData() {
-  const p = await open({ multiple: false, filters: [{ name: "Sauvegarde SXM PDF", extensions: ["json"] }] });
+  const p = await open({ multiple: false, filters: [{ name: tr("Sauvegarde SXM PDF"), extensions: ["json"] }] });
   if (!p) return;
   const merge = await confirmBox("Importer une sauvegarde",
     "Ajouter le contenu de la sauvegarde à vos éléments actuels, ou tout remplacer ?", "Ajouter", "Annuler", "Tout remplacer");
@@ -136,10 +137,24 @@ export async function about() {
     el("p", {}, "© 2026 Invisible_Dawn."),
     el("p", {}, "Composants libres : PDF.js et pdf-lib (Apache 2.0 / MIT), Tauri (MIT/Apache 2.0). Les conversions Office utilisent LibreOffice, distribué sous licence MPL 2.0 (www.libreoffice.org). Le chiffrement utilise qpdf (Apache 2.0). Police des filigranes : DejaVu Sans 2.37 (licences Bitstream Vera et Arev, redistribution autorisée)."),
     settingsBlock(),
+    langBlock(),
     el("div", { class: "row end" },
       el("button", { class: "btn", onclick: () => { close(); checkNow(); } }, "Rechercher les mises à jour"),
       el("button", { class: "btn", onclick: () => showLicense() }, "Licence de la police DejaVu"),
       el("button", { class: "btn accent", onclick: () => close() }, "Fermer"))));
+}
+
+/** Choix de la langue de l'interface (appliqué au prochain démarrage). */
+function langBlock() {
+  const sel = el("select", { style: "width:auto" },
+    ...[["auto", "Automatique (langue du système)"], ["fr", "Français"], ["en", "English"]].map(([v, l]) => {
+      const o = el("option", { value: v }, l);
+      if (v === langSetting()) o.selected = true;
+      return o;
+    }));
+  const note = el("span", { style: "font-size:12px;color:var(--muted)" });
+  sel.addEventListener("change", () => { setLangSetting(sel.value); note.textContent = "La langue change au prochain démarrage de SXM PDF."; });
+  return el("div", { style: "display:flex;gap:8px;align-items:center;flex-wrap:wrap" }, el("b", {}, "Langue"), sel, note);
 }
 
 async function showLicense() {

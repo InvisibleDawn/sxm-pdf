@@ -17,6 +17,7 @@ let server, browser, page;
 
 // ------------------------------------------------------------------ faux Tauri (dans la page)
 const FAKE_TAURI = () => {
+  localStorage.setItem("sxm.lang", "fr"); // textes vérifiés en français, quelle que soit la langue de Chrome
   const files = new Map(); // chemin → Uint8Array
   const dialogs = [];      // réponses préprogrammées des boîtes « Ouvrir / Enregistrer / Dossier »
   window.__fs = files;

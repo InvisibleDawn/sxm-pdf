@@ -6,6 +6,7 @@ const SIG_KEY = "sxm.signatures";
 const STAMP_KEY = "sxm.stamps";
 
 import * as db from "./store.js";
+import { tr } from "./i18n.js";
 const load = (k) => [...(db.get(k, []) || [])];
 const store = (k, v) => db.set(k, v);
 
@@ -134,7 +135,7 @@ const BUILTIN = [
   { label: "APPROUVÉ", color: "#15803d" }, { label: "REÇU", color: "#1d4ed8" }, { label: "PAYÉ", color: "#15803d" },
   { label: "REFUSÉ", color: "#b91c1c" }, { label: "CONFIDENTIEL", color: "#b91c1c" }, { label: "COPIE", color: "#6d28d9" },
   { label: "URGENT", color: "#c2410c" }, { label: "VU", color: "#0e7490" }, { label: "BROUILLON", color: "#475569" },
-];
+].map((s) => ({ ...s, label: tr(s.label) })); // tampons prêts à l'emploi dans la langue de l'interface
 
 export const today = () => new Date().toLocaleDateString("fr-FR");
 

@@ -15,9 +15,15 @@ export const setBeta = (on) => db.set("sxm.updates.beta", on ? "1" : "0");
 
 let running = false;
 
+/** Linux (.rpm / .deb) : pas d'installation par l'app, on ouvre la page de la version dans le navigateur. */
+const linuxDownload = (u) =>
+  invoke("open_external", { url: `${RELEASES}/tag/v${u.version}` }).catch(() => toast(`Téléchargez la nouvelle version sur ${RELEASES}`, true));
+const installOrDownload = (u) => (isLinux ? linuxDownload(u) : install(u));
+const installLabel = () => (isLinux ? "Télécharger" : "Installer");
+
 /** Vérification discrète quelques secondes après le démarrage. */
 export function autoCheck() {
-  if (isLinux || !autoEnabled()) return;
+  if (!autoEnabled()) return;
   setTimeout(async () => {
     try {
       const u = await invoke("update_check", { beta: betaEnabled() });
@@ -28,13 +34,6 @@ export function autoCheck() {
 
 /** Vérification demandée par l'utilisateur (menu ⋯ ou À propos). */
 export async function checkNow() {
-  if (isLinux) {
-    return modal((m, close) => m.append(
-      el("h2", {}, "Mises à jour sous Linux"),
-      el("p", {}, "Sous Linux, installez la nouvelle version (.rpm ou .deb) depuis la page de téléchargement :"),
-      el("p", { style: "user-select:text;font-size:12px" }, RELEASES),
-      el("div", { class: "row end" }, el("button", { class: "btn accent", onclick: () => close() }, "Compris"))));
-  }
   if (running) return;
   running = true;
   toast("Recherche des mises à jour…");
@@ -43,8 +42,17 @@ export async function checkNow() {
     if (u) await offer(u, false);
     else toast("Vous avez la dernière version de SXM PDF.");
   } catch (e) {
+    if (isLinux) { running = false; return linuxHelp(); }
     toast("Impossible de vérifier les mises à jour. Vérifiez votre connexion Internet.\n" + String(e?.message || e), true);
   } finally { running = false; }
+}
+
+function linuxHelp() {
+  return modal((m, close) => m.append(
+    el("h2", {}, "Mises à jour sous Linux"),
+    el("p", {}, "Sous Linux, installez la nouvelle version (.rpm ou .deb) depuis la page de téléchargement :"),
+    el("p", { style: "user-select:text;font-size:12px" }, RELEASES),
+    el("div", { class: "row end" }, el("button", { class: "btn accent", onclick: () => close() }, "Compris"))));
 }
 
 /**
@@ -65,7 +73,7 @@ export function notify(u) {
       el("button", { class: "uc-x", title: "Plus tard", "aria-label": "Plus tard", onclick: close }, "×")),
     el("div", { class: "uc-sub" }, `Vous utilisez la version ${u.current}.`),
     el("div", { class: "uc-row" },
-      small("Installer", () => { close(); install(u); }, "btn accent"),
+      small(installLabel(), () => { close(); installOrDownload(u); }, "btn accent"),
       u.notes ? small("Nouveautés", () => { close(); offer(u, true); }) : null,
       small("Plus tard", close)),
     el("button", { class: "uc-skip", onclick: () => { db.set("sxm.updates.skip", u.version); close(); } }, "Ignorer cette version"));
@@ -76,14 +84,16 @@ export function notify(u) {
 function offer(u, automatic) {
   return modal((m, close) => m.append(
     el("h2", {}, `🎉 SXM PDF ${u.version} est disponible`),
-    el("p", {}, `Vous utilisez la version ${u.current}. La mise à jour se télécharge et s'installe en un clic ; vos signatures et réglages sont conservés.`),
+    el("p", {}, isLinux
+      ? `Vous utilisez la version ${u.current}. « Télécharger » ouvre la page de la nouvelle version : installez le .rpm (ou le .deb) en double-cliquant dessus ; vos signatures et réglages sont conservés.`
+      : `Vous utilisez la version ${u.current}. La mise à jour se télécharge et s'installe en un clic ; vos signatures et réglages sont conservés.`),
     u.notes ? el("div", {},
       el("b", {}, "Nouveautés"),
       el("pre", { style: "max-height:40vh;overflow:auto;white-space:pre-wrap;font:inherit;font-size:13px;background:var(--panel2);padding:10px 12px;border-radius:8px;user-select:text;margin:6px 0 0" }, u.notes)) : null,
     el("div", { class: "row end" },
       automatic ? el("button", { class: "btn", onclick: () => { db.set("sxm.updates.skip", u.version); close(); } }, "Ignorer cette version") : null,
       el("button", { class: "btn", onclick: () => close() }, "Plus tard"),
-      el("button", { class: "btn accent", onclick: () => { close(); install(u); } }, "Installer maintenant"))));
+      el("button", { class: "btn accent", onclick: () => { close(); installOrDownload(u); } }, isLinux ? "Télécharger" : "Installer maintenant"))));
 }
 
 async function install(u) {
@@ -127,7 +137,6 @@ async function install(u) {
 
 /** Réglages affichés dans « À propos ». */
 export function settingsBlock() {
-  if (isLinux) return el("p", { style: "font-size:12px" }, "Mises à jour : installez les nouvelles versions .rpm / .deb depuis la page de téléchargement.");
   const check = (label, on, set) => {
     const c = el("input", { type: "checkbox" });
     c.checked = on;
@@ -137,5 +146,6 @@ export function settingsBlock() {
   return el("div", { style: "display:flex;flex-direction:column;gap:6px" },
     el("b", {}, "Mises à jour"),
     check("Rechercher automatiquement au démarrage", autoEnabled(), setAuto),
-    check("Recevoir aussi les versions de test (bêta)", betaEnabled(), setBeta));
+    check("Recevoir aussi les versions de test (bêta)", betaEnabled(), setBeta),
+    isLinux ? el("p", { style: "font-size:12px;margin:0" }, "Linux : SXM PDF vous prévient ; l'installation du .rpm / .deb se fait depuis la page de téléchargement.") : null);
 }

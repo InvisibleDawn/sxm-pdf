@@ -1,5 +1,26 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-16 — Version 1.5.0 : interface en anglais, avis de mise à jour sous Fedora
+
+- **Interface en anglais** : SXM PDF s'affiche en français si l'ordinateur est en français, sinon en anglais.
+  Le choix se change dans « À propos » > Langue (Automatique / Français / English), au prochain démarrage.
+  En anglais, les tampons prêts à l'emploi (APPROVED, PAID…) et les filigranes proposés sont aussi en anglais.
+- **Fedora / Linux** : la petite carte « nouvelle version disponible » s'affiche aussi. Le bouton « Télécharger »
+  ouvre la page de la version pour installer le nouveau .rpm. Rien n'est installé sans votre accord.
+- Compilations : Windows + Fedora (.rpm) seulement, environ 25 min au lieu de 45 (Mac et .deb sur demande).
+
+## 2026-11-16 — 1.5.0 : détails techniques
+
+- `src/i18n.js` : langue (`localStorage` « sxm.lang » : auto / fr / en) ; en anglais, un MutationObserver traduit
+  nœuds texte et attributs (title, placeholder, aria-label, data-tip) via `src/i18n-en.js` (≈ 500 textes exacts,
+  règles « X : » et « X (raccourci) », ≈ 55 modèles à parties variables). Jamais dans `.pdfViewer` ni les champs.
+  Les modules existants ne sont pas réécrits. Restent en français : messages d'erreur venant de Rust, menu Mac.
+- Tests : `tests/i18n.test.mjs` (4), `tests/e2e/anglais.e2e.mjs` (aucun texte français à l'accueil, dans le ruban
+  et les fenêtres principales) ; les tests d'interface existants forcent le français.
+- `latest.json` contient toujours une entrée `linux-x86_64` (lien vers le .rpm Fedora, signature factice : Linux
+  ne fait que prévenir), même sans les secrets de signature.
+- Workflow : matrices calculées ; « [mac] » / « [deb] » dans le message du commit réactivent Mac / .deb.
+
 ## 2026-11-16 — Version 1.4.1 : avis de mise à jour discret
 
 - Quand une nouvelle version est disponible, SXM PDF affiche une **petite carte en bas à droite**, qui ne bloque

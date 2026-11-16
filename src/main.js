@@ -21,6 +21,9 @@ import { doBatch, doParaphe, doSearchRedact, doWatermark, protectDialog, unprote
 import { activate, closeTab, openPaths } from "./tabs.js";
 import { version as APP_VERSION } from "../package.json";
 import { autoCheck, checkNow } from "./update.js";
+import { initI18n } from "./i18n.js";
+
+initI18n(); // anglais : traduit l'interface affichée (sans effet en français)
 
 const ACTIONS = {
   open: async () => openPaths(io.toArray(await io.pickPdf(true))),
