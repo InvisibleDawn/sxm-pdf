@@ -73,6 +73,10 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   Test de fermeture réelle : envoyer WM_DELETE_WINDOW (python-xlib) à l'app sous Xvfb.
 - Captures d'écran de contrôle : `node .shots/shot.mjs` (dossier ignoré par git).
 
+## Décidé le 16/11 (à faire à la prochaine session)
+- Compilations : **Windows + Fedora (.rpm) seulement** (Mac et .deb retirés du workflow, environ 25 min au lieu de 45).
+- Version anglaise de l'interface : n'existe pas encore (tout est en français) ; à ajouter.
+
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
 2. Signature des installateurs (certificat Windows, compte développeur Apple 99 $/an).
