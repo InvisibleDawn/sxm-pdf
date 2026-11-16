@@ -1,6 +1,6 @@
 # Journal des modifications — SXM PDF
 
-## Version 1.5.1 (en préparation)
+## 2026-11-16 — Version 1.5.1 : mises à jour Windows signées
 
 - Nouvelle clé de signature des mises à jour (l'ancienne a été perdue), sans mot de passe : un seul secret GitHub,
   `TAURI_SIGNING_PRIVATE_KEY`. Les versions 1.4.x / 1.5.0 ne reconnaissent pas cette clé : installer la 1.5.1 à la
