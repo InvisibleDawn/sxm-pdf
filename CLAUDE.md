@@ -35,7 +35,9 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - Publier une version : pousser un tag `vX.Y.Z` (stable) ou `vX.Y.Z-beta.N` (bêta) → compilation,
   page Releases et fichier de mise à jour automatiques. Penser à écrire la section du CHANGELOG avant.
 - Mises à jour auto : `src/update.js` + commandes Rust `update_check` / `update_install`. Clé privée de
-  signature : secrets GitHub (sauvegarde chez Invisible_Dawn) — la perdre = plus de mises à jour possibles.
+  signature (16/11, nouvelle clé sans mot de passe) : un seul secret GitHub `TAURI_SIGNING_PRIVATE_KEY`, sauvegarde
+  chez Invisible_Dawn (fichier « SXM-PDF-cle-mises-a-jour.txt ») — la perdre = plus de mises à jour possibles.
+  Les sessions Claude ne peuvent ni lire ni écrire les secrets (proxy) : c'est Invisible_Dawn qui les ajoute.
 - Publier une version : mettre la version dans `package.json`, `tauri.conf.json`, `Cargo.toml`, écrire la 1re section
   du CHANGELOG, puis `git push -f origin HEAD:publier` (le proxy des sessions Claude refuse la création de tags ;
   le workflow crée lui-même le tag `vX.Y.Z`, la page Releases et `latest.json`). Un tag `vX.Y.Z` poussé à la main marche aussi.

@@ -2,6 +2,9 @@
 
 ## Version 1.5.1 (en préparation)
 
+- Nouvelle clé de signature des mises à jour (l'ancienne a été perdue), sans mot de passe : un seul secret GitHub,
+  `TAURI_SIGNING_PRIVATE_KEY`. Les versions 1.4.x / 1.5.0 ne reconnaissent pas cette clé : installer la 1.5.1 à la
+  main une dernière fois.
 - « Rechercher les mises à jour » n'affiche plus « Impossible de vérifier… Vérifiez votre connexion Internet » quand
   aucune version n'est encore publiée pour votre système : la réponse est simplement « Vous avez la dernière
   version ». Le message d'erreur reste réservé aux vrais problèmes de connexion.
