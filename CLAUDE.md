@@ -36,7 +36,9 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   page Releases et fichier de mise à jour automatiques. Penser à écrire la section du CHANGELOG avant.
 - Mises à jour auto : `src/update.js` + commandes Rust `update_check` / `update_install`. Clé privée de
   signature : secrets GitHub (sauvegarde chez Invisible_Dawn) — la perdre = plus de mises à jour possibles.
-- Versions : tag `vX.Y.Z` → compilation + page Releases + `latest.json` (mises à jour auto) en un seul workflow.
+- Publier une version : mettre la version dans `package.json`, `tauri.conf.json`, `Cargo.toml`, écrire la 1re section
+  du CHANGELOG, puis `git push -f origin HEAD:publier` (le proxy des sessions Claude refuse la création de tags ;
+  le workflow crée lui-même le tag `vX.Y.Z`, la page Releases et `latest.json`). Un tag `vX.Y.Z` poussé à la main marche aussi.
   Branche de travail unique : `main` (1.4.0 = 1.3.3 de `design-v3` + mises à jour auto, 16/11).
 
 ## État au 2026-11-06

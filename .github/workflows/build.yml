@@ -5,7 +5,7 @@ name: Compiler SXM PDF
 on:
   workflow_dispatch:
   push:
-    branches: [main]   # à chaque envoi : tests seuls (rapide)
+    branches: [main, publier]   # main : tests seuls (rapide) ; publier : tests + installateurs + page Releases
     tags: ["v*"]       # à chaque version : tests + installateurs
 
 jobs:
@@ -162,7 +162,7 @@ jobs:
   # 2) Installateurs — seulement si les tests passent, au lancement manuel ou sur un tag de version.
   build:
     needs: [audit, tests, fedora, debian]
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/publier'
     timeout-minutes: 90
     strategy:
       fail-fast: false
@@ -270,12 +270,12 @@ jobs:
       # Sur un tag v1.2.3 : la version de l'application = celle du tag, et les fichiers
       # de mise à jour signés sont produits (clé dans les secrets du dépôt).
       - name: Version et mises à jour
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/publier'
         shell: bash
         env:
           HAS_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
         run: |
-          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');if(process.env.HAS_KEY==='true')c.bundle.createUpdaterArtifacts=true;require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log('version',c.version,'maj',!!c.bundle.createUpdaterArtifacts)"
+          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version=process.env.GITHUB_REF_TYPE==='tag'?process.env.GITHUB_REF_NAME.replace(/^v/,''):require('./package.json').version;if(process.env.HAS_KEY==='true')c.bundle.createUpdaterArtifacts=true;require('fs').writeFileSync(f,JSON.stringify(c,null,2));console.log('version',c.version,'maj',!!c.bundle.createUpdaterArtifacts)"
 
       - run: npm ci
       - name: Compiler
@@ -286,7 +286,8 @@ jobs:
         run: |
           B="${{ matrix.bundles }}"
           # Le format .msi refuse les versions de test (« 1.4.0-beta ») : seulement .exe dans ce cas.
-          case "$GITHUB_REF_NAME" in v*-*) B="${B/msi,/}" ;; esac
+          T="$GITHUB_REF_NAME"; [ "$GITHUB_REF_TYPE" = tag ] || T="v$(node -p "require('./package.json').version")"
+          case "$T" in v*-*) B="${B/msi,/}" ;; esac
           npx tauri build --bundles "$B" ${{ startsWith(matrix.os, 'macos') && '--target universal-apple-darwin' || '' }} -- --locked
 
       - uses: actions/upload-artifact@v4
@@ -307,7 +308,7 @@ jobs:
   #    v1.4.0-beta.1 / v1.4.0-test = version de test → seulement ceux qui ont coché « bêta ».
   publier:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/publier'
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     permissions:
@@ -324,6 +325,9 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -e
+          # Envoi sur la branche « publier » : nom de version lu dans package.json, tag créé ici.
+          if [ "$GITHUB_REF_TYPE" = tag ]; then CIBLE="--verify-tag"; else TAG="v$(node -p "require('./package.json').version")"; CIBLE="--target $GITHUB_SHA"; fi
+          echo "Version publiée : $TAG"
           mkdir fichiers
           find artefacts -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" -o -name "*.rpm" -o -name "*.deb" -o -name "*.sig" -o -name "*.app.tar.gz" \) -not -path "*fedora*" -exec cp {} fichiers/ \;
           # .rpm construit et testé sur Fedora 45 : nom distinct
@@ -365,7 +369,7 @@ jobs:
           TXT
           sed -i 's/^          //' ../notes-page.txt
           gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes 2>/dev/null || true
-          gh release create "$TAG" * --repo "$GITHUB_REPOSITORY" --verify-tag $PRE \
+          gh release create "$TAG" * --repo "$GITHUB_REPOSITORY" $CIBLE $PRE \
             --title "SXM PDF $VERSION" --notes-file ../notes-page.txt
           # Canal bêta : toujours la dernière version publiée (test ou stable)
           if [ -f latest.json ]; then
