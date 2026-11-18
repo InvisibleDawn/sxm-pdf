@@ -1,0 +1,51 @@
+# Diagnostic : rejoue sous Windows la mise à jour intégrée 1.5.1 → 1.5.2, exactement comme l'app
+# (installateur NSIS lancé avec /P /UPDATE /R /ARGS après fermeture de l'app).
+# Lancement : git push -f origin HEAD:sonde-maj — résultats dans le journal du workflow.
+name: Sonde Windows (mise à jour)
+
+on:
+  push:
+    branches: [sonde-maj]
+
+jobs:
+  sonde:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Télécharger 1.5.1 et 1.5.2
+        shell: pwsh
+        run: |
+          $b = "https://github.com/InvisibleDawn/sxm-pdf/releases/download"
+          Invoke-WebRequest "$b/v1.5.1/SXM-PDF_1.5.1_x64-setup.exe" -OutFile "$env:RUNNER_TEMP\old.exe"
+          Invoke-WebRequest "$b/v1.5.2/SXM-PDF_1.5.2_x64-setup.exe" -OutFile "$env:RUNNER_TEMP\new.exe"
+      - name: Installer 1.5.1 (silencieux) et la lancer
+        shell: pwsh
+        run: |
+          $t = Measure-Command { Start-Process "$env:RUNNER_TEMP\old.exe" -ArgumentList "/S" -Wait }
+          Write-Host "Installation 1.5.1 : $([int]$t.TotalSeconds) s"
+          $exe = Get-ChildItem "$env:LOCALAPPDATA" -Recurse -Filter sxm-pdf.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $exe) { $exe = Get-ChildItem "C:\Program Files" -Recurse -Filter sxm-pdf.exe -ErrorAction SilentlyContinue | Select-Object -First 1 }
+          Write-Host "Installée dans : $($exe.FullName) — version $($exe.VersionInfo.ProductVersion)"
+          "EXE=$($exe.FullName)" | Out-File -Append $env:GITHUB_ENV
+          Start-Process $exe.FullName
+          Start-Sleep 8
+          Get-Process sxm-pdf -ErrorAction SilentlyContinue | Format-Table Id, ProcessName, StartTime
+      - name: Mise à jour comme l'app (fermeture puis NSIS /P /UPDATE /R /ARGS)
+        shell: pwsh
+        run: |
+          Stop-Process -Name sxm-pdf -Force -ErrorAction SilentlyContinue
+          Start-Sleep 1
+          $start = Get-Date
+          $p = Start-Process "$env:RUNNER_TEMP\new.exe" -ArgumentList "/P /UPDATE /R /ARGS" -PassThru
+          for ($i = 0; $i -lt 120; $i++) {
+            Start-Sleep 5
+            $inst = Get-Process -Id $p.Id -ErrorAction SilentlyContinue
+            $app = Get-Process sxm-pdf -ErrorAction SilentlyContinue
+            $sec = [int]((Get-Date) - $start).TotalSeconds
+            Write-Host "$sec s : installateur $(if ($inst) {'en cours'} else {'terminé (code ' + $p.ExitCode + ')'}) ; app $(if ($app) {'lancée'} else {'fermée'})"
+            if (-not $inst -and $app) { break }
+            if (-not $inst -and $sec -gt 60) { break }
+          }
+          $v = (Get-Item $env:EXE).VersionInfo.ProductVersion
+          Write-Host "Version installée après mise à jour : $v"
+          Get-ChildItem (Split-Path $env:EXE) | Select-Object -First 15 Name, Length, LastWriteTime | Format-Table
