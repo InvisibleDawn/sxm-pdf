@@ -113,7 +113,7 @@ async function install(u) {
     closeBox = close;
     m.append(el("h2", {}, `Mise à jour vers ${u.version}`), label,
       el("div", { style: "height:8px;border-radius:4px;background:var(--panel2);overflow:hidden" }, bar),
-      el("p", { style: "font-size:12px" }, "SXM PDF redémarrera automatiquement à la fin."));
+      el("p", { style: "font-size:12px" }, "Après le téléchargement, SXM PDF se ferme pendant l'installation (1 à 3 minutes) puis se rouvre tout seul. Ne le relancez pas entre-temps."));
   });
   const progress = new Channel();
   progress.onmessage = ([done, total]) => {

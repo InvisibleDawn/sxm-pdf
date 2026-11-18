@@ -530,7 +530,7 @@ export const EN = {
   "Nouveautés": "What's new",
   "Plus tard": "Later",
   "Ignorer cette version": "Skip this version",
-  "SXM PDF redémarrera automatiquement à la fin.": "SXM PDF will restart automatically when done.",
+  "Après le téléchargement, SXM PDF se ferme pendant l'installation (1 à 3 minutes) puis se rouvre tout seul. Ne le relancez pas entre-temps.": "After the download, SXM PDF closes during the installation (1 to 3 minutes) and then reopens by itself. Don't restart it in the meantime.",
   "La mise à jour a échoué :": "The update failed:",
   "Mises à jour sous Linux": "Updates on Linux",
   "Sous Linux, installez la nouvelle version (.rpm ou .deb) depuis la page de téléchargement :": "On Linux, install the new version (.rpm or .deb) from the download page:",

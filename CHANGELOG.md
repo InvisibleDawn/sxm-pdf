@@ -1,5 +1,11 @@
 # Journal des modifications — SXM PDF
 
+## Prochaine version (en préparation)
+
+- Pendant une mise à jour, la fenêtre de progression prévient : « SXM PDF se ferme pendant l'installation
+  (1 à 3 minutes) puis se rouvre tout seul. Ne le relancez pas entre-temps. » (16–18/11 : mise à jour 1.5.1 → 1.5.2
+  validée sur le PC Windows d'Invisible_Dawn et rejouée sur Windows Server : ≈ 55 s puis réouverture automatique.)
+
 ## 2026-11-16 — Version 1.5.2 : essai de la mise à jour intégrée
 
 - Version d'essai : elle sert à vérifier que la mise à jour depuis la 1.5.1 se fait en un clic (carte en bas à
