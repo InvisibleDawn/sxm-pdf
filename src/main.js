@@ -8,8 +8,8 @@ import { message, open } from "@tauri-apps/plugin-dialog";
 import * as db from "./store.js";
 import { toast, el, askText, confirmBox, busy, modal } from "./ui.js";
 import * as io from "./io.js";
-import { createIcons, Image as ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload } from "lucide";
-const ICONS = { Image: ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload };
+import { createIcons, Image as ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload, Cloud, FolderLock } from "lucide";
+const ICONS = { Image: ImageIcon, FolderOpen, Scissors, Signature, Package, Send, Pin, SunMoon, Info, Save, Printer, Ellipsis, Undo2, Redo2, MousePointer2, Highlighter, Type, Stamp, Underline, Strikethrough, SquareDashed, MessageSquare, Pencil, Lasso, Square, Circle, MoveUpRight, Minus, Trash, PenLine, ImagePlus, EyeOff, Search, Lock, LockOpen, FilePlus, FileImage, FileOutput, Combine, Split, FileText, FileDown, ZoomIn, ZoomOut, Droplet, House, ShieldCheck, Files, Wrench, PaintBucket, FileInput, Images, LetterText, FileType, LayoutGrid, Upload, Cloud, FolderLock };
 import { initTooltips } from "./tooltip.js";
 import { about, applyTheme, exportData, firstRunWelcome, importData, initTheme, pinApp, setDefault, initSaveStatus } from "./app.js";
 import { convertOffice, doCapture, imagesToPdf, pdfToDocx, pdfToPng, pdfToText } from "./convert.js";
@@ -22,11 +22,14 @@ import { activate, closeTab, openPaths } from "./tabs.js";
 import { version as APP_VERSION } from "../package.json";
 import { autoCheck, checkNow } from "./update.js";
 import { initI18n } from "./i18n.js";
+import { initCloud, openFrom } from "./cloud.js";
 
 initI18n(); // anglais : traduit l'interface affichée (sans effet en français)
 
 const ACTIONS = {
   open: async () => openPaths(io.toArray(await io.pickPdf(true))),
+  "open-onedrive": () => openFrom("onedrive"),
+  "open-proton": () => openFrom("proton"),
   save: () => saveTab(),
   saveas: () => saveTab(tab(), true),
   office2pdf: () => convertOffice(),
@@ -197,6 +200,7 @@ initTooltips();
 initTheme();
 firstRunWelcome();
 autoCheck();
+initCloud(); // boutons OneDrive / Proton Drive selon ce qui est installé
 setTool("select");
 { const v = document.querySelector("#app-version"); if (v) v.textContent = "v" + APP_VERSION; }
 activate(null);

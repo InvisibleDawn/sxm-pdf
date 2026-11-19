@@ -1,5 +1,23 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-19 — Version 1.6.0 : ouvrir depuis OneDrive et Proton Drive
+
+- **Écran d'accueil** : cartes « Ouvrir depuis OneDrive » et « Ouvrir depuis Proton Drive ».
+  **Onglet Accueil** : deux icônes à côté de « Ouvrir » (nuage bleu, dossier violet).
+- Un clic ouvre la fenêtre d'ouverture habituelle directement dans le dossier OneDrive / Proton Drive de
+  l'ordinateur, puis dans le **dernier dossier utilisé**. À l'enregistrement, l'application OneDrive / Proton Drive
+  envoie elle-même le fichier dans le cloud. Aucun compte à connecter, aucune autorisation.
+- Les boutons n'apparaissent que si le service est installé. Sinon (ou sous Linux) : « Télécharger » l'application,
+  ou « Choisir le dossier… » synchronisé une fois pour toutes.
+
+## 2026-11-19 — 1.6.0 : détails techniques
+
+- Rust `cloud.rs` : `cloud_folders` (Windows : variables OneDriveCommercial / OneDriveConsumer / OneDrive et dossiers
+  « OneDrive* » / « Proton Drive* » du profil ; macOS : ~/Library/CloudStorage/OneDrive-* et ProtonDrive-* ;
+  Linux : ~/OneDrive, ~/Proton Drive*) et `dir_exists` ; 3 tests (45 au total).
+- JS `cloud.js` (`initCloud`, `openFrom`) ; réglages `sxm.cloud.<service>.root` (dossier choisi) et `.last`.
+- Test d'interface : racine puis dernier dossier, ouverture du PDF, message « non installé » (14 tests d'interface).
+
 ## 2026-11-19 — Version 1.5.3 : retour du Mac
 
 - **Mac** : SXM PDF 1.5.x disponible sur macOS (interface en anglais, avis discret de mise à jour). Depuis un Mac

@@ -87,6 +87,12 @@ export const EN = {
   "aucun": "none",
   "Texte à masquer (nom, numéro…) — plusieurs possibles, séparés par ;": "Text to redact (name, number…) — several allowed, separated by ;",
 
+  "Ouvrir depuis OneDrive": "Open from OneDrive",
+  "Ouvrir depuis Proton Drive": "Open from Proton Drive",
+  "Vos PDF synchronisés, en un clic.": "Your synced PDFs, in one click.",
+  "Vos PDF chiffrés, en un clic.": "Your encrypted PDFs, in one click.",
+  "Déjà installée, ou dossier synchronisé autrement ? Choisissez-le une fois pour toutes.": "Already installed, or synced another way? Choose the folder once and for all.",
+
   // ---------------------------------------------------------------- couleurs
   "Jaune": "Yellow",
   "Vert": "Green",
@@ -597,6 +603,10 @@ export const EN_PATTERNS = [
   ["Document scanné : tracez un rectangle sur la zone à souligner.", "Scanned document: draw a rectangle over the area to underline."],
   ["Document scanné : tracez un rectangle sur la zone à barrer.", "Scanned document: draw a rectangle over the area to strike through."],
   ["Ajouter la date du jour ({0})", "Add today's date ({0})"],
+  ["{0} n'est pas installé", "{0} is not installed"],
+  ["Pour ouvrir vos fichiers {0} ici, installez l'application {0} sur cet ordinateur : elle synchronise un dossier que SXM PDF ouvrira directement.",
+    "To open your {0} files here, install the {0} app on this computer: it syncs a folder that SXM PDF will open directly."],
+  ["Télécharger {0}", "Download {0}"],
   ["ex. 1-3, 5 (sur {0})", "e.g. 1-3, 5 (of {0})"],
   ["{0} champ(s) de formulaire et {1} signet(s)", "{0} form field(s) and {1} bookmark(s)"],
   ["{0} champ(s) de formulaire", "{0} form field(s)"],

@@ -424,3 +424,43 @@ test("nouvelle version : avis discret (non bloquant), rien n'est installé sans 
   assert.equal(r.nouveautes, true);
   await page.keyboard.press("Escape");
 });
+
+test("OneDrive / Proton Drive : ouverture dans le dossier synchronisé, puis dans le dernier dossier utilisé", async () => {
+  const doc = await PDFDocument.create(); doc.addPage([200, 200]);
+  const bytes = [...await doc.save()];
+  const r = await page.evaluate(async (bytes) => {
+    const calls = [];
+    const real = window.__TAURI_INTERNALS__.invoke;
+    const OD = "/home/u/OneDrive";
+    window.__TAURI_INTERNALS__.invoke = async (cmd, args, opts) => {
+      calls.push([cmd, args]);
+      if (cmd === "cloud_folders") return { onedrive: [OD], proton: [] };
+      if (cmd === "dir_exists") return args.path.startsWith(OD);
+      return real(cmd, args, opts);
+    };
+    const cloud = await import("/src/cloud.js");
+    await cloud.initCloud();
+    const out = {};
+    out.carte = !document.querySelector('.home-card[data-cloud="onedrive"]').hidden;
+    window.__fs.set(OD + "/RH/Contrats/contrat.pdf", new Uint8Array(bytes));
+    window.__dialogs.push(OD + "/RH/Contrats/contrat.pdf");
+    await cloud.openFrom("onedrive");
+    const opens = () => calls.filter(([c]) => c === "plugin:dialog|open").map(([, a]) => a.options.defaultPath);
+    out.premier = opens()[0];
+    out.ouvert = [...document.querySelectorAll(".tab")].some((t) => t.textContent.includes("contrat.pdf"));
+    window.__dialogs.push(null); // annulé
+    await cloud.openFrom("onedrive");
+    out.second = opens()[1];
+    cloud.openFrom("proton"); // non installé : la fenêtre reste ouverte jusqu'à fermeture
+    await new Promise((r) => setTimeout(r, 300));
+    out.protonModal = document.querySelector(".modal")?.textContent || "";
+    window.__TAURI_INTERNALS__.invoke = real;
+    return out;
+  }, bytes);
+  assert.equal(r.carte, true);
+  assert.equal(r.premier, "/home/u/OneDrive", "1re fois : racine OneDrive");
+  assert.equal(r.ouvert, true, "le PDF choisi s'ouvre");
+  assert.equal(r.second, "/home/u/OneDrive/RH/Contrats", "ensuite : dernier dossier utilisé");
+  assert.match(r.protonModal, /Proton Drive n'est pas installé/);
+  await page.keyboard.press("Escape");
+});

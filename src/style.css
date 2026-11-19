@@ -428,3 +428,8 @@ body.at-home #sidebar { display: none; }
 .update-card .uc-row { display: flex; gap: 6px; margin-top: 2px; }
 .update-card .uc-row .btn { padding: 4px 10px; font-size: 12px; width: auto; }
 .update-card .uc-skip { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--muted); font-size: 11px; text-decoration: underline; cursor: pointer; width: auto; }
+
+/* Ouvrir depuis OneDrive / Proton Drive (cloud.js) : masqués si le service n'est pas installé */
+[data-cloud][hidden] { display: none !important; }
+.rib-panel button.cloud-od svg.lucide { color: #0364b8; }
+.rib-panel button.cloud-pd svg.lucide { color: #6d4aff; }

@@ -5,6 +5,7 @@ use std::process::Command;
 use tauri::{Emitter, Manager};
 
 mod capture;
+mod cloud;
 mod convert;
 mod data;
 mod files;
@@ -874,7 +875,9 @@ fn main() {
             check_tools,
             temp_path,
             update_check,
-            update_install
+            update_install,
+            cloud::cloud_folders,
+            cloud::dir_exists
         ])
         .build(tauri::generate_context!())
         .expect("Erreur au démarrage de SXM PDF")

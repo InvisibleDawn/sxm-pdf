@@ -18,8 +18,8 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
 - outils : `annots.js, sign.js, rh.js, watermark.js, capture.js, tooltip.js` ; données : `store.js`
 - `pdfclean.js` : effacement réel des pages retirées / masquées (`purgeUnreachable`, `removePageClean`).
   Toujours l'utiliser au lieu de `pdf.removePage` seul (pdf-lib garde les objets inutilisés dans le fichier).
-- natif : `src-tauri/src/` — `main.rs` (démarrage + 42 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
-  `capture.rs`, `qpdf.rs`, `system.rs` ; tests JS : `npm test` (16) ; interface : `npm run test:e2e` (12 + anglais, sous la CSP de production, Chrome sans écran)
+- natif : `src-tauri/src/` — `main.rs` (démarrage + 45 tests `cargo test --release`), `files.rs`, `data.rs`, `convert.rs`,
+  `capture.rs`, `qpdf.rs`, `system.rs`, `cloud.rs` ; tests JS : `npm test` (16) ; interface : `npm run test:e2e` (13 + anglais, sous la CSP de production, Chrome sans écran)
 - écriture des PDF : toujours sûre (`write_file_safely`) ; PDF protégés via `io.writePdf` (jamais en clair à destination) ;
   mots de passe qpdf par fichier d'arguments privé ; temporaires dans un dossier privé à l'utilisateur
   (Linux : `$XDG_RUNTIME_DIR/sxm-pdf`), nettoyés au démarrage ; noms de temporaires aléatoires (`create_new`).
@@ -82,6 +82,12 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   doit être ajouté au dictionnaire** (sinon `tests/e2e/anglais.e2e.mjs` échoue s'il est visible dans le parcours).
 - Mises à jour : carte discrète en bas à droite (`notify`), jamais d'installation sans clic ; Linux : « Télécharger »
   ouvre la page de la version.
+
+## 1.6.0 (19/11)
+- « Ouvrir depuis OneDrive / Proton Drive » (solution simple choisie par Invisible_Dawn : fenêtre d'ouverture du système
+  dans le dossier synchronisé, pas d'API cloud ni de compte). `src/cloud.js` + `src-tauri/src/cloud.rs`.
+  Écartés pour l'instant : API Microsoft Graph (vérification d'éditeur nécessaire pour les comptes pro), SDK Proton
+  (pas encore ouvert aux applications tierces), fenêtre SXM à miniatures (jugée trop imposante).
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
