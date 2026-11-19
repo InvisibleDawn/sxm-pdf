@@ -1,7 +1,9 @@
 # Journal des modifications — SXM PDF
 
-## Prochaine version (en préparation)
+## 2026-11-19 — Version 1.5.3 : retour du Mac
 
+- **Mac** : SXM PDF 1.5.x disponible sur macOS (interface en anglais, avis discret de mise à jour). Depuis un Mac
+  en 1.4.x, installer cette version à la main une dernière fois ; les suivantes arriveront toutes seules.
 - Pendant une mise à jour, la fenêtre de progression prévient : « SXM PDF se ferme pendant l'installation
   (1 à 3 minutes) puis se rouvre tout seul. Ne le relancez pas entre-temps. » (16–18/11 : mise à jour 1.5.1 → 1.5.2
   validée sur le PC Windows d'Invisible_Dawn et rejouée sur Windows Server : ≈ 55 s puis réouverture automatique.)
