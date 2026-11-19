@@ -441,7 +441,8 @@ test("OneDrive / Proton Drive : ouverture dans le dossier synchronisé, puis dan
     const cloud = await import("/src/cloud.js");
     await cloud.initCloud();
     const out = {};
-    out.carte = !document.querySelector('.home-card[data-cloud="onedrive"]').hidden;
+    out.carte = !document.querySelector('.home-card[data-cloud="onedrive"]').hidden
+      && !document.querySelector('.home-card[data-cloud="proton"]').hidden; // toujours visibles, même non installé
     window.__fs.set(OD + "/RH/Contrats/contrat.pdf", new Uint8Array(bytes));
     window.__dialogs.push(OD + "/RH/Contrats/contrat.pdf");
     await cloud.openFrom("onedrive");

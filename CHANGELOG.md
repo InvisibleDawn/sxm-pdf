@@ -1,5 +1,11 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-19 — Version 1.6.1 : boutons OneDrive / Proton Drive toujours visibles
+
+- Les cartes et icônes « Ouvrir depuis OneDrive / Proton Drive » sont toujours affichées. Au clic, le dossier
+  synchronisé s'ouvre ; si l'application n'est pas installée, SXM PDF le dit et propose de la télécharger ou de
+  choisir le dossier une fois pour toutes.
+
 ## 2026-11-19 — Version 1.6.0 : ouvrir depuis OneDrive et Proton Drive
 
 - **Écran d'accueil** : cartes « Ouvrir depuis OneDrive » et « Ouvrir depuis Proton Drive ».

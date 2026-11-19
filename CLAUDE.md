@@ -88,6 +88,7 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   dans le dossier synchronisé, pas d'API cloud ni de compte). `src/cloud.js` + `src-tauri/src/cloud.rs`.
   Écartés pour l'instant : API Microsoft Graph (vérification d'éditeur nécessaire pour les comptes pro), SDK Proton
   (pas encore ouvert aux applications tierces), fenêtre SXM à miniatures (jugée trop imposante).
+  1.6.1 : boutons toujours visibles (au clic : dossier, ou message « non installé » + choisir le dossier).
 
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).

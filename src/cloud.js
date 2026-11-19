@@ -20,12 +20,10 @@ let found = { onedrive: [], proton: [] };
 const chosen = (s) => db.get(`sxm.cloud.${s}.root`, "");
 const exists = (path) => invoke("dir_exists", { path }).catch(() => false);
 
-/** Bouton visible si le service est installé ou si un dossier a été choisi. Linux : toujours visible
- *  (pas d'application officielle, l'utilisateur choisit son dossier synchronisé). */
-export const visible = (s) => io.isLinux || !!chosen(s) || (found[s] || []).length > 0;
-
+/** Boutons toujours visibles (choix d'Invisible_Dawn, 19/11) : au clic, le dossier s'ouvre, ou SXM PDF
+ *  prévient que l'application n'est pas installée et propose de choisir le dossier. */
 export function refresh() {
-  document.querySelectorAll("[data-cloud]").forEach((e) => { e.hidden = !visible(e.dataset.cloud); });
+  document.querySelectorAll("[data-cloud]").forEach((e) => { e.hidden = false; });
 }
 
 export async function initCloud() {
