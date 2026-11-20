@@ -39,7 +39,7 @@ export function firstRunWelcome() {
   if (db.get("sxm.welcomed")) return;
   db.set("sxm.welcomed", "1");
   setTimeout(() => modal((m, close) => m.append(
-    el("img", { src: "/logo.png", style: "width:64px;align-self:center" }),
+    el("img", { src: "/illustrations/banniere.webp", alt: "", style: "width:100%;max-width:480px;align-self:center;border-radius:12px;display:block" }),
     el("h2", { style: "text-align:center" }, "Bienvenue dans SXM PDF !"),
     el("p", { style: "text-align:center" }, `Pour retrouver l'application facilement, ajoutez-la à ${PIN_PLACE}.`),
     el("div", { class: "row end" },
@@ -132,6 +132,7 @@ export async function about() {
   let version = "";
   try { version = await getVersion(); } catch {}
   modal((m, close) => m.append(
+    el("img", { src: "/illustrations/banniere.webp", alt: "", style: "width:100%;max-width:480px;align-self:center;border-radius:12px;display:block" }),
     el("h2", {}, `SXM PDF ${version}`),
     el("p", {}, "Lire, annoter, signer, convertir et capturer."),
     el("p", {}, "© 2026 Invisible_Dawn."),

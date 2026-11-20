@@ -90,6 +90,11 @@ capture d'écran avec éditeur, traitement par lot avec profils, impression, env
   (pas encore ouvert aux applications tierces), fenêtre SXM à miniatures (jugée trop imposante).
   1.6.1 : boutons toujours visibles (au clic : dossier, ou message « non installé » + choisir le dossier).
 
+## 1.6.2 (20/11) — logo
+- Icône et bannière fournies par Invisible_Dawn (images générées, même famille que SXM Mail) : icônes `src-tauri/icons`
+  (via `npx tauri icon`, .icns avec marge pour macOS), `public/logo.png`, `public/illustrations/banniere.webp`.
+  Ne pas redessiner le logo en SVG (refusé) ; jamais de symbole Adobe/Acrobat dans les visuels.
+
 ## Reste à faire avant la vente
 1. Essais réels Windows / Mac (capture, impression, envoi mail, conversion Office).
 2. Signature des installateurs (certificat Windows, compte développeur Apple 99 $/an).

@@ -1,5 +1,11 @@
 # Journal des modifications — SXM PDF
 
+## 2026-11-20 — Version 1.6.2 : nouveau logo
+
+- Nouvelle icône d'application (la mascotte pingouin de la famille SXM, avec un PDF à la main), sur Windows, Mac,
+  Fedora et dans l'application (barre latérale, accueil).
+- La bannière « SXM PDF — Your friendly PDF toolkit » s'affiche dans « À propos » et à l'écran de bienvenue.
+
 ## 2026-11-19 — Version 1.6.1 : boutons OneDrive / Proton Drive toujours visibles
 
 - Les cartes et icônes « Ouvrir depuis OneDrive / Proton Drive » sont toujours affichées. Au clic, le dossier
